@@ -22,6 +22,11 @@ namespace MarketPortfolioAnalytics.Data
             modelBuilder.Entity<Position>()
                 .HasKey(p => new { p.AssetId, p.PortfolioId })
                 .HasName("PK_Position");
+
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
         }
         public DbSet<MarketPortfolioAnalytics.Models.Position> Position { get; set; } = default!;
         public DbSet<MarketPortfolioAnalytics.Models.Portfolio> Portfolio { get; set; } = default!;

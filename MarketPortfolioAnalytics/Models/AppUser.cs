@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace MarketPortfolioAnalytics.Models
 {
@@ -29,6 +31,17 @@ namespace MarketPortfolioAnalytics.Models
         [Required]
         [Column("CreatedAt")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [JsonIgnore]
+        [ValidateNever]
+        public string PasswordHash { get; set; } = string.Empty;
+
+
+        [NotMapped]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Password { get; set; }
+
+        public DateTime? PasswordUpdatedAt { get; set; }
 
         public virtual ICollection<Portfolio>? ListePortfolios { get; set; }
 
