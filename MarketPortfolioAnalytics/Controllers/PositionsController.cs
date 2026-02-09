@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MarketPortfolioAnalytics.Data;
@@ -22,101 +21,110 @@ namespace MarketPortfolioAnalytics.Controllers
         }
 
         // GET: api/Positions
+        // (Optionnel) liste globale — utile pour debug
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Position>>> GetPosition()
+        public async Task<ActionResult<IEnumerable<Position>>> GetPositions()
         {
-            return await _context.Position.ToListAsync();
+            return await _context.Position
+                .Include(p => p.Asset)
+                .Include(p => p.Portfolio)
+                .ToListAsync();
         }
 
-        // GET: api/Positions/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Position>> GetPosition(int id)
+        // GET: api/Positions/{portfolioId}/{assetId}
+        [HttpGet("{portfolioId:int}/{assetId:int}")]
+        public async Task<ActionResult<Position>> GetPosition(int portfolioId, int assetId)
         {
-            var position = await _context.Position.FindAsync(id);
+            var position = await _context.Position
+                .Include(p => p.Asset)
+                .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId && p.AssetId == assetId);
 
-            if (position == null)
-            {
-                return NotFound();
-            }
-
+            if (position == null) return NotFound();
             return position;
         }
 
-        // PUT: api/Positions/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutPosition(int id, Position position)
-        {
-            if (id != position.AssetId)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(position).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!PositionExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
         // POST: api/Positions
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // Ajoute un actif dans un portfolio (Position unique)
         [HttpPost]
-        public async Task<ActionResult<Position>> PostPosition(Position position)
+        public async Task<ActionResult<Position>> PostPosition(Position input)
         {
-            _context.Position.Add(position);
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                if (PositionExists(position.AssetId))
-                {
-                    return Conflict();
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            // validations de base
+            if (input.PortfolioId <= 0) return BadRequest("PortfolioId is required.");
+            if (input.AssetId <= 0) return BadRequest("AssetId is required.");
+            if (input.Quantity <= 0) return BadRequest("Quantity must be > 0.");
+            if (input.AvgBuyPrice <= 0) return BadRequest("AvgBuyPrice must be > 0.");
+            if (input.BuyDate == default) return BadRequest("BuyDate is required.");
 
-            return CreatedAtAction("GetPosition", new { id = position.AssetId }, position);
+            // Portfolio existe ?
+            bool portfolioExists = await _context.Portfolio.AnyAsync(p => p.Id == input.PortfolioId);
+            if (!portfolioExists) return BadRequest("Portfolio not found.");
+
+            // Asset existe ?
+            bool assetExists = await _context.Asset.AnyAsync(a => a.Id == input.AssetId);
+            if (!assetExists) return BadRequest("Asset not found.");
+
+            // Unicité (PortfolioId, AssetId)
+            bool positionExists = await _context.Position.AnyAsync(p =>
+                p.PortfolioId == input.PortfolioId && p.AssetId == input.AssetId);
+
+            if (positionExists) return Conflict("This asset already exists in the portfolio.");
+
+            var position = new Position
+            {
+                PortfolioId = input.PortfolioId,
+                AssetId = input.AssetId,
+                Quantity = input.Quantity,
+                AvgBuyPrice = input.AvgBuyPrice,
+                BuyDate = input.BuyDate,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Position.Add(position);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetPosition),
+                new { portfolioId = position.PortfolioId, assetId = position.AssetId },
+                position);
         }
 
-        // DELETE: api/Positions/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeletePosition(int id)
+        // PUT: api/Positions/{portfolioId}/{assetId}
+        // Update contrôlé : ne change pas les IDs
+        [HttpPut("{portfolioId:int}/{assetId:int}")]
+        public async Task<IActionResult> PutPosition(int portfolioId, int assetId, Position input)
         {
-            var position = await _context.Position.FindAsync(id);
-            if (position == null)
-            {
-                return NotFound();
-            }
+            var position = await _context.Position
+                .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId && p.AssetId == assetId);
 
-            _context.Position.Remove(position);
+            if (position == null) return NotFound();
+
+            if (input.Quantity <= 0) return BadRequest("Quantity must be > 0.");
+            if (input.AvgBuyPrice <= 0) return BadRequest("AvgBuyPrice must be > 0.");
+            if (input.BuyDate == default) return BadRequest("BuyDate is required.");
+
+            // Champs autorisés
+            position.Quantity = input.Quantity;
+            position.AvgBuyPrice = input.AvgBuyPrice;
+            position.BuyDate = input.BuyDate;
+
+            // Champs sensibles ignorés : PortfolioId, AssetId, CreatedAt
             await _context.SaveChangesAsync();
 
             return NoContent();
         }
 
-        private bool PositionExists(int id)
+        // DELETE: api/Positions/{portfolioId}/{assetId}
+        [HttpDelete("{portfolioId:int}/{assetId:int}")]
+        public async Task<IActionResult> DeletePosition(int portfolioId, int assetId)
         {
-            return _context.Position.Any(e => e.AssetId == id);
+            var position = await _context.Position
+                .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId && p.AssetId == assetId);
+
+            if (position == null) return NotFound();
+
+            _context.Position.Remove(position);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
     }
 }

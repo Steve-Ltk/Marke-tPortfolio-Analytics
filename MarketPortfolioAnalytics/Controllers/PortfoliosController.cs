@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MarketPortfolioAnalytics.Data;
@@ -29,70 +29,125 @@ namespace MarketPortfolioAnalytics.Controllers
         }
 
         // GET: api/Portfolios/5
+        // Retourne seulement le portfolio (sans positions)
         [HttpGet("{id}")]
         public async Task<ActionResult<Portfolio>> GetPortfolio(int id)
         {
             var portfolio = await _context.Portfolio.FindAsync(id);
+            if (portfolio == null) return NotFound();
+            return portfolio;
+        }
+
+        // GET: api/Portfolios/5/details
+        // Retourne le portfolio + positions + assets
+        [HttpGet("{id}/details")]
+        public async Task<ActionResult<Portfolio>> GetPortfolioDetails(int id)
+        {
+            var portfolio = await _context.Portfolio
+                .Include(p => p.ListePositions!)
+                    .ThenInclude(pos => pos.Asset)
+                .FirstOrDefaultAsync(p => p.Id == id);
 
             if (portfolio == null)
-            {
                 return NotFound();
-            }
 
             return portfolio;
         }
 
-        // PUT: api/Portfolios/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutPortfolio(int id, Portfolio portfolio)
-        {
-            if (id != portfolio.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(portfolio).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!PortfolioExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
         // POST: api/Portfolios
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Portfolio>> PostPortfolio(Portfolio portfolio)
+        public async Task<ActionResult<Portfolio>> PostPortfolio(Portfolio input)
         {
+            if (string.IsNullOrWhiteSpace(input.Name))
+                return BadRequest("Name is required.");
+
+            // Currency : par défaut EUR si non fourni
+            var currency = string.IsNullOrWhiteSpace(input.Currency)
+                ? "EUR"
+                : input.Currency.Trim().ToUpper();
+
+            if (!Regex.IsMatch(currency, "^[A-Z]{3}$"))
+                return BadRequest("Currency must be a 3-letter code (e.g., EUR, USD).");
+
+            if (input.UserId <= 0)
+                return BadRequest("UserId is required.");
+
+            bool userOk = await _context.AppUser.AnyAsync(u => u.Id == input.UserId && u.IsActive);
+            if (!userOk)
+                return BadRequest("UserId is invalid or user is inactive.");
+
+            var portfolio = new Portfolio
+            {
+                Name = input.Name.Trim(),
+                Currency = currency,
+                CreatedAt = DateTime.UtcNow,
+                UserId = input.UserId
+            };
+
             _context.Portfolio.Add(portfolio);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetPortfolio", new { id = portfolio.Id }, portfolio);
+            return CreatedAtAction(nameof(GetPortfolio), new { id = portfolio.Id }, portfolio);
         }
 
-        // DELETE: api/Portfolios/5
+
+        // PUT: api/Portfolios/5
+        // Update contrôlé: on autorise uniquement Name et Currency (pas UserId, pas CreatedAt)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutPortfolio(int id, Portfolio input)
+        {
+            var portfolio = await _context.Portfolio.FindAsync(id);
+            if (portfolio == null) return NotFound();
+
+            // Name obligatoire
+            if (string.IsNullOrWhiteSpace(input.Name))
+                return BadRequest("Name is required.");
+
+            // Currency obligatoire
+            var currency = string.IsNullOrWhiteSpace(input.Currency)
+            ? "EUR"
+            : input.Currency.Trim().ToUpper();
+
+            if (!Regex.IsMatch(currency, "^[A-Z]{3}$"))
+                return BadRequest("Currency must be a 3-letter code (e.g., EUR, USD).");
+
+
+            // Champs autorisés
+            portfolio.Name = input.Name.Trim();
+            portfolio.Currency = currency;
+
+            // Champs sensibles ignorés:
+            // portfolio.UserId = portfolio.UserId;
+            // portfolio.CreatedAt = portfolio.CreatedAt;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // GET: api/Portfolios/5/positions
+        [HttpGet("{id}/positions")]
+        public async Task<ActionResult<IEnumerable<Position>>> GetPortfolioPositions(int id)
+        {
+            var portfolioExists = await _context.Portfolio.AnyAsync(p => p.Id == id);
+            if (!portfolioExists) return NotFound("Portfolio not found.");
+
+            var positions = await _context.Position
+                .Where(p => p.PortfolioId == id)
+                .ToListAsync();
+
+            return positions;
+        }
+
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePortfolio(int id)
         {
             var portfolio = await _context.Portfolio.FindAsync(id);
-            if (portfolio == null)
-            {
-                return NotFound();
-            }
+            if (portfolio == null) return NotFound();
+
+            bool hasPositions = await _context.Position.AnyAsync(p => p.PortfolioId == id);
+            if (hasPositions)
+                return BadRequest("Cannot delete a portfolio that has positions. Delete positions first.");
 
             _context.Portfolio.Remove(portfolio);
             await _context.SaveChangesAsync();
@@ -100,9 +155,5 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
-        private bool PortfolioExists(int id)
-        {
-            return _context.Portfolio.Any(e => e.Id == id);
-        }
     }
 }

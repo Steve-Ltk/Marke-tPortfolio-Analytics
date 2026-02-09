@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 
 namespace MarketPortfolioAnalytics.Models
@@ -24,6 +25,7 @@ namespace MarketPortfolioAnalytics.Models
         [ForeignKey("AppUsers")]
         public int UserId { get; set; }
 
+        [JsonIgnore]
         public virtual AppUser? User { get; set; }
 
         public virtual ICollection<Position>? ListePositions { get; set; }
