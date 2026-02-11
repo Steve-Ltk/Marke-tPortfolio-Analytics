@@ -9,6 +9,7 @@ using MarketPortfolioAnalytics.Data;
 using MarketPortfolioAnalytics.Models;
 using MarketPortfolioAnalytics.Services;
 using MarketPortfolioAnalytics.Models.Requests;
+using System.Text.Json;
 
 
 
@@ -40,10 +41,21 @@ namespace MarketPortfolioAnalytics.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<Asset>> GetAsset(int id)
         {
+            // 1) Stock ?
+            var stock = await _context.Set<Stock>().FirstOrDefaultAsync(s => s.Id == id);
+            if (stock != null) return stock;
+
+            // 2) Bond ?
+            var bond = await _context.Set<Bond>().FirstOrDefaultAsync(b => b.Id == id);
+            if (bond != null) return bond;
+
+            // 3) Asset simple ?
             var asset = await _context.Asset.FindAsync(id);
             if (asset == null) return NotFound();
+
             return asset;
         }
+
 
         // GET: api/Assets/by-ticker/AAPL
         [HttpGet("by-ticker/{ticker}")]
@@ -101,42 +113,108 @@ namespace MarketPortfolioAnalytics.Controllers
             return CreatedAtAction(nameof(GetAsset), new { id = asset.Id }, asset);
         }
 
-        // POST: api/Assets/from-fmp
-        // Crée un Asset uniquement si le ticker existe sur FMP
-        [HttpPost("from-fmp")]
-        public async Task<ActionResult<Asset>> CreateAssetFromFmp([FromBody] AssetFromFmpRequest input)
+        // POST: api/Assets/stocks/from-fmp
+        // Body: { "ticker": "AAPL", "sector": "...", "isin": "..." } (sector/isin optionnels)
+        [HttpPost("stocks/from-fmp")]
+        public async Task<ActionResult<Asset>> CreateStockFromFmp([FromBody] Stock input)
         {
             if (input == null || string.IsNullOrWhiteSpace(input.Ticker))
                 return BadRequest("Ticker is required.");
 
             var ticker = input.Ticker.Trim().ToUpper();
 
+            // Unicité sur Asset
             bool exists = await _context.Asset.AnyAsync(a => a.Ticker == ticker);
             if (exists) return Conflict("Ticker already exists.");
 
-            var quote = await _fmp.GetQuoteMinimalAsync(ticker);
-            if (quote == null)
+            // Validation + metadata depuis FMP
+            var profile = await _fmp.GetProfileAsync(ticker);
+            if (profile == null)
                 return BadRequest("Ticker not found on FMP (or FMP error).");
 
-            var asset = new Asset
+            // Création Stock (TPT => écrit Asset + Stock)
+            var stock = new Stock
             {
-                Ticker = quote.Value.Symbol,
-                Name = quote.Value.Name,
-                Exchange = quote.Value.Exchange,
-                Currency = "USD", // stable/quote ne renvoie pas currency dans ton exemple
-                CreatedAt = DateTime.UtcNow
+                Ticker = profile.Value.Symbol,
+                Name = profile.Value.Name,
+                Currency = profile.Value.Currency,
+                Exchange = profile.Value.Exchange,
+                CreatedAt = DateTime.UtcNow,
+
+                // FMP -> sinon input -> sinon null
+                Sector = !string.IsNullOrWhiteSpace(profile.Value.Sector)
+                 ? profile.Value.Sector!.Trim()
+                 : (string.IsNullOrWhiteSpace(input.Sector) ? null : input.Sector.Trim()),
+
+                ISIN = !string.IsNullOrWhiteSpace(profile.Value.Isin)
+                 ? profile.Value.Isin!.Trim()
+                 : (string.IsNullOrWhiteSpace(input.ISIN) ? null : input.ISIN.Trim())
             };
 
-            _context.Asset.Add(asset);
+
+            _context.Asset.Add(stock);   // important: Add sur le DbSet Asset marche (EF détecte Stock)
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetAsset), new { id = asset.Id }, asset);
+            return CreatedAtAction(nameof(GetAsset), new { id = stock.Id }, stock);
         }
 
+        // POST: api/Assets/bonds/from-fmp
+        // Body: { "ticker": "AAPL" }
+    [HttpPost("bonds/from-fmp")]
+    public async Task<ActionResult<Asset>> CreateBondFromFmp([FromBody] JsonElement body)
+    {
+        if (body.ValueKind != JsonValueKind.Object)
+            return BadRequest("Body must be a JSON object.");
 
-        // PUT: api/Assets/5
-        // Update contrôlé : on évite d'écraser tout
-        [HttpPut("{id}")]
+        if (!body.TryGetProperty("ticker", out var tEl) || string.IsNullOrWhiteSpace(tEl.GetString()))
+            return BadRequest("Ticker is required.");
+
+        var ticker = tEl.GetString()!.Trim().ToUpper();
+
+        if (await _context.Asset.AnyAsync(a => a.Ticker == ticker))
+            return Conflict("Ticker already exists.");
+
+        var profile = await _fmp.GetProfileAsync(ticker);
+        if (profile == null)
+            return BadRequest("Ticker not found on FMP (or FMP error).");
+
+        var bondInfo = await _fmp.GetBondAsync(ticker); // peut être null
+
+        // input optionnel (override) : couponRate / maturityDate
+        decimal? inputCoupon = null;
+        if (body.TryGetProperty("couponRate", out var cEl) && cEl.ValueKind == JsonValueKind.Number)
+            inputCoupon = cEl.GetDecimal();
+
+        DateTime? inputMaturity = null;
+        if (body.TryGetProperty("maturityDate", out var mEl) && mEl.ValueKind == JsonValueKind.String
+            && DateTime.TryParse(mEl.GetString(), out var dt))
+            inputMaturity = dt.Date;
+
+        var bond = new Bond
+        {
+            Ticker = profile.Value.Symbol,
+            Name = profile.Value.Name,
+            Currency = profile.Value.Currency,
+            Exchange = profile.Value.Exchange,
+            CreatedAt = DateTime.UtcNow,
+
+            // FMP -> sinon input -> sinon null
+            CouponRate = bondInfo?.CouponRate ?? inputCoupon,
+            MaturityDate = bondInfo?.MaturityDate ?? inputMaturity
+        };
+
+        _context.Asset.Add(bond);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetAsset), new { id = bond.Id }, bond);
+    }
+
+
+
+
+    // PUT: api/Assets/5
+    // Update contrôlé : on évite d'écraser tout
+    [HttpPut("{id}")]
         public async Task<IActionResult> PutAsset(int id, Asset input)
         {
             var asset = await _context.Asset.FindAsync(id);

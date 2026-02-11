@@ -40,7 +40,7 @@ app.MapControllers();
 using (var serviceScope = app.Services.GetService<IServiceScopeFactory>().CreateScope())
 {
     var context = serviceScope.ServiceProvider.GetRequiredService<MarketPortfolioAnalyticsContext>();
-    //context.Database.EnsureDeleted();
+    context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
 }
 

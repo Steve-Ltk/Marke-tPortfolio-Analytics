@@ -27,6 +27,16 @@ namespace MarketPortfolioAnalytics.Data
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Asset>().ToTable("Asset");
+            modelBuilder.Entity<Stock>().ToTable("Stock");
+            modelBuilder.Entity<Bond>().ToTable("Bond");
+
+            modelBuilder.Entity<Asset>()
+                .HasIndex(a => a.Ticker)
+                .IsUnique();
+
         }
         public DbSet<MarketPortfolioAnalytics.Models.Position> Position { get; set; } = default!;
         public DbSet<MarketPortfolioAnalytics.Models.Portfolio> Portfolio { get; set; } = default!;
