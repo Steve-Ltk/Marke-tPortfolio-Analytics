@@ -30,11 +30,6 @@ namespace MarketPortfolioAnalytics.Controllers
         // LECTURE
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Retourne la liste de tous les utilisateurs actifs.
-        /// Les utilisateurs désactivés (soft delete) ne sont pas retournés.
-        /// </summary>
-        // GET api/AppUsers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<AppUser>>> GetAll()
         {
@@ -43,11 +38,6 @@ namespace MarketPortfolioAnalytics.Controllers
                 .ToListAsync();
         }
 
-        /// <summary>
-        /// Retourne un utilisateur actif par son Id.
-        /// Retourne 404 si l'utilisateur n'existe pas ou est désactivé.
-        /// </summary>
-        // GET api/AppUsers/5
         [HttpGet("{id}")]
         public async Task<ActionResult<AppUser>> GetById(int id)
         {
@@ -60,14 +50,9 @@ namespace MarketPortfolioAnalytics.Controllers
             return user;
         }
 
-        /// <summary>
-        /// Retourne tous les portefeuilles appartenant à un utilisateur actif.
-        /// </summary>
-        // GET api/AppUsers/5/portfolios
         [HttpGet("{id}/portfolios")]
         public async Task<ActionResult<IEnumerable<Portfolio>>> GetPortfolios(int id)
         {
-            // Vérification que l'utilisateur existe et est actif
             bool userExists = await _context.AppUser
                 .AnyAsync(u => u.Id == id && u.IsActive);
 
@@ -85,25 +70,9 @@ namespace MarketPortfolioAnalytics.Controllers
         // CRÉATION
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Crée un nouvel utilisateur.
-        ///
-        /// Champs attendus dans le body JSON :
-        ///   - FullName    : nom complet (requis)
-        ///   - Email       : email valide et unique (requis)
-        ///   - Password    : mot de passe en clair, min 8 caractères (requis)
-        ///
-        /// Champs imposés par le serveur (ignorés si fournis par le client) :
-        ///   - Role        → "User" par défaut
-        ///   - IsActive    → true
-        ///   - CreatedAt   → DateTime.UtcNow
-        ///   - PasswordHash → calculé ici à partir de Password
-        /// </summary>
-        // POST api/AppUsers
         [HttpPost]
         public async Task<ActionResult<AppUser>> Create([FromBody] AppUser input)
         {
-            // ── Validation email ──────────────────────────────────────────────
             if (string.IsNullOrWhiteSpace(input.FullName))
                 return BadRequest("Le nom complet est requis.");
 
@@ -113,15 +82,12 @@ namespace MarketPortfolioAnalytics.Controllers
             if (!new EmailAddressAttribute().IsValid(input.Email))
                 return BadRequest("Le format de l'email est invalide.");
 
-            // ── Validation mot de passe ───────────────────────────────────────
             if (string.IsNullOrWhiteSpace(input.Password))
                 return BadRequest("Le mot de passe est requis.");
 
             if (input.Password.Length < 8)
                 return BadRequest("Le mot de passe doit contenir au moins 8 caractères.");
 
-            // ── Unicité de l'email ────────────────────────────────────────────
-            // On normalise en minuscules pour éviter les doublons "User@example.com" vs "user@example.com"
             string normalizedEmail = input.Email.Trim().ToLower();
 
             bool emailTaken = await _context.AppUser
@@ -130,20 +96,15 @@ namespace MarketPortfolioAnalytics.Controllers
             if (emailTaken)
                 return Conflict("Un compte existe déjà avec cet email.");
 
-            // ── Construction de l'entité ──────────────────────────────────────
-            // On construit un nouvel objet au lieu de modifier input directement.
-            // Cela garantit que le client ne peut pas imposer Role, IsActive ou CreatedAt.
             var user = new AppUser
             {
                 FullName = input.FullName?.Trim() ?? string.Empty,
                 Email = normalizedEmail,
-                Role = "User",       // toujours "User" à la création
+                Role = "User",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Hash du mot de passe via ASP.NET Identity
-            // PasswordHasher utilise PBKDF2 avec sel aléatoire — sécurisé
             var hasher = new PasswordHasher<AppUser>();
             user.PasswordHash = hasher.HashPassword(user, input.Password);
             user.PasswordUpdatedAt = DateTime.UtcNow;
@@ -151,7 +112,6 @@ namespace MarketPortfolioAnalytics.Controllers
             _context.AppUser.Add(user);
             await _context.SaveChangesAsync();
 
-            // 201 Created avec l'URL de la ressource créée dans le header Location
             return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
         }
 
@@ -162,12 +122,14 @@ namespace MarketPortfolioAnalytics.Controllers
         /// <summary>
         /// Met à jour FullName et/ou Email d'un utilisateur actif.
         ///
-        /// Champs modifiables : FullName, Email.
-        /// Champs ignorés même si fournis : Role, IsActive, CreatedAt, Password.
+        /// IMPORTANT : on accepte un DTO léger (UpdateUserRequest) et non le modèle
+        /// AppUser complet, car AppUser a [Required] sur Email, Role, IsActive et CreatedAt.
+        /// Un PUT avec seulement {"fullName": "Alice"} déclencherait sinon une erreur
+        /// de validation 400 avant d'atteindre la méthode.
         /// </summary>
         // PUT api/AppUsers/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] AppUser input)
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest input)
         {
             var user = await _context.AppUser.FindAsync(id);
 
@@ -177,11 +139,9 @@ namespace MarketPortfolioAnalytics.Controllers
             if (!user.IsActive)
                 return BadRequest("Impossible de modifier un utilisateur inactif.");
 
-            // ── FullName ──────────────────────────────────────────────────────
             if (!string.IsNullOrWhiteSpace(input.FullName))
                 user.FullName = input.FullName.Trim();
 
-            // ── Email ─────────────────────────────────────────────────────────
             if (!string.IsNullOrWhiteSpace(input.Email))
             {
                 if (!new EmailAddressAttribute().IsValid(input.Email))
@@ -189,7 +149,6 @@ namespace MarketPortfolioAnalytics.Controllers
 
                 string normalized = input.Email.Trim().ToLower();
 
-                // On vérifie l'unicité uniquement si l'email change réellement
                 if (!string.Equals(user.Email, normalized, StringComparison.OrdinalIgnoreCase))
                 {
                     bool emailTaken = await _context.AppUser
@@ -203,16 +162,9 @@ namespace MarketPortfolioAnalytics.Controllers
             }
 
             await _context.SaveChangesAsync();
-            return NoContent(); // 204 : succès sans contenu retourné
+            return NoContent();
         }
 
-        /// <summary>
-        /// Change le rôle d'un utilisateur.
-        /// Valeurs acceptées : "User" ou "Admin".
-        ///
-        /// Route dédiée pour éviter qu'un simple PUT puisse modifier le rôle.
-        /// </summary>
-        // PATCH api/AppUsers/5/role
         [HttpPatch("{id}/role")]
         public async Task<IActionResult> UpdateRole(int id, [FromBody] string role)
         {
@@ -234,11 +186,6 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
-        /// <summary>
-        /// Change le mot de passe d'un utilisateur actif.
-        /// Le nouveau mot de passe est hashé avant stockage.
-        /// </summary>
-        // PATCH api/AppUsers/5/password
         [HttpPatch("{id}/password")]
         public async Task<IActionResult> UpdatePassword(int id, [FromBody] string newPassword)
         {
@@ -264,11 +211,6 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
-        /// <summary>
-        /// Réactive un compte utilisateur désactivé.
-        /// Sans effet si le compte est déjà actif (idempotent).
-        /// </summary>
-        // PATCH api/AppUsers/5/activate
         [HttpPatch("{id}/activate")]
         public async Task<IActionResult> Activate(int id)
         {
@@ -277,7 +219,6 @@ namespace MarketPortfolioAnalytics.Controllers
             if (user is null)
                 return NotFound($"Utilisateur {id} introuvable.");
 
-            // Déjà actif → on retourne 204 sans rien faire (idempotent)
             if (user.IsActive)
                 return NoContent();
 
@@ -290,16 +231,6 @@ namespace MarketPortfolioAnalytics.Controllers
         // SUPPRESSION (soft delete)
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Désactive un utilisateur (soft delete).
-        /// L'enregistrement reste en base — IsActive passe à false.
-        /// Sans effet si le compte est déjà inactif (idempotent).
-        ///
-        /// On ne supprime jamais un utilisateur en base car :
-        ///   - ses portefeuilles et positions constituent un historique
-        ///   - la contrainte Restrict empêcherait la suppression si des portfolios existent
-        /// </summary>
-        // DELETE api/AppUsers/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -308,7 +239,6 @@ namespace MarketPortfolioAnalytics.Controllers
             if (user is null)
                 return NotFound($"Utilisateur {id} introuvable.");
 
-            // Déjà inactif → idempotent
             if (!user.IsActive)
                 return NoContent();
 
@@ -317,4 +247,17 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DTO — évite la validation prématurée du modèle AppUser complet
+    //
+    // Pourquoi un DTO ?
+    //   AppUser a [Required] sur Email, Role, IsActive et CreatedAt.
+    //   Lors d'un PUT avec {"fullName": "Alice"}, ASP.NET rejette en 400 avant
+    //   d'appeler la méthode. Avec UpdateUserRequest (champs nullable), la
+    //   validation du modèle passe et le contrôleur gère la logique métier.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Corps de la requête de mise à jour d'un utilisateur (PUT).</summary>
+    public record UpdateUserRequest(string? FullName, string? Email);
 }
