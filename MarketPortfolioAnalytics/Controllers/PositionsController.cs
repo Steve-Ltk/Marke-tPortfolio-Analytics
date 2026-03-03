@@ -1,130 +1,84 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MarketPortfolioAnalytics.Data;
-using MarketPortfolioAnalytics.Models;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
-namespace MarketPortfolioAnalytics.Controllers
+namespace MarketPortfolioAnalytics.Models
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class PositionsController : ControllerBase
+    /// <summary>
+    /// Table d'association entre Portfolio et Asset.
+    ///
+    /// Répond à la question : "Combien d'unités de CET actif
+    /// sont détenues dans CE portefeuille, et à quel prix ont-elles été achetées ?"
+    ///
+    /// Clé primaire composite : (PortfolioId, AssetId)
+    ///   → Un même actif ne peut apparaître qu'une seule fois dans un portefeuille.
+    ///   → Si l'utilisateur rachète le même actif, il met à jour Quantity et AvgBuyPrice.
+    ///
+    /// Relation :
+    ///   Portfolio  1 ────── * Position * ────── 1  Asset
+    ///   (un portefeuille    (table d'association)  (un actif peut être
+    ///   a plusieurs                                dans plusieurs portefeuilles)
+    ///   positions)
+    /// </summary>
+    [Table("Position")]
+    public class Position
     {
-        private readonly MarketPortfolioAnalyticsContext _context;
+        // ── Clé composite (PortfolioId, AssetId) ─────────────────────────────
+        // Configurée en Fluent API dans le DbContext.
+        // Les deux colonnes servent à la fois de PK et de FK.
 
-        public PositionsController(MarketPortfolioAnalyticsContext context)
-        {
-            _context = context;
-        }
+        /// <summary>Référence vers le portefeuille.</summary>
+        public int PortfolioId { get; set; }
 
-        // GET: api/Positions
-        // (Optionnel) liste globale — utile pour debug
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Position>>> GetPositions()
-        {
-            return await _context.Position
-                .Include(p => p.Asset)
-                .Include(p => p.Portfolio)
-                .ToListAsync();
-        }
+        /// <summary>
+        /// Navigation vers le portefeuille.
+        /// JsonIgnore : quand on retourne une Position, on n'a pas besoin
+        /// de re-sérialiser tout le portefeuille (qui contient déjà cette position).
+        /// </summary>
+        [JsonIgnore]
+        [ForeignKey(nameof(PortfolioId))]
+        public virtual Portfolio? Portfolio { get; set; }
 
-        // GET: api/Positions/{portfolioId}/{assetId}
-        [HttpGet("{portfolioId:int}/{assetId:int}")]
-        public async Task<ActionResult<Position>> GetPosition(int portfolioId, int assetId)
-        {
-            var position = await _context.Position
-                .Include(p => p.Asset)
-                .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId && p.AssetId == assetId);
+        /// <summary>Référence vers l'actif détenu.</summary>
+        public int AssetId { get; set; }
 
-            if (position == null) return NotFound();
-            return position;
-        }
+        /// <summary>
+        /// Navigation vers l'actif.
+        /// Inclus dans la réponse : utile pour afficher Ticker, Name, Currency
+        /// sans faire une requête séparée.
+        /// </summary>
+        [ForeignKey(nameof(AssetId))]
+        public virtual Asset? Asset { get; set; }
 
-        // POST: api/Positions
-        // Ajoute un actif dans un portfolio (Position unique)
-        [HttpPost]
-        public async Task<ActionResult<Position>> PostPosition(Position input)
-        {
-            // validations de base
-            if (input.PortfolioId <= 0) return BadRequest("PortfolioId is required.");
-            if (input.AssetId <= 0) return BadRequest("AssetId is required.");
-            if (input.Quantity <= 0) return BadRequest("Quantity must be > 0.");
-            if (input.AvgBuyPrice <= 0) return BadRequest("AvgBuyPrice must be > 0.");
-            if (input.BuyDate == default) return BadRequest("BuyDate is required.");
+        // ── Données de la position ────────────────────────────────────────────
 
-            // Portfolio existe ?
-            bool portfolioExists = await _context.Portfolio.AnyAsync(p => p.Id == input.PortfolioId);
-            if (!portfolioExists) return BadRequest("Portfolio not found.");
+        /// <summary>
+        /// Nombre d'unités détenues.
+        /// decimal pour supporter les fractions (ex: 0.5 Bitcoin, 1000 obligations).
+        /// Doit être strictement positif.
+        /// </summary>
+        [Required]
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal Quantity { get; set; }
 
-            // Asset existe ?
-            bool assetExists = await _context.Asset.AnyAsync(a => a.Id == input.AssetId);
-            if (!assetExists) return BadRequest("Asset not found.");
+        /// <summary>
+        /// Prix moyen d'achat par unité.
+        /// Sert à calculer la plus-value latente : PnL = (PrixActuel - AvgBuyPrice) × Quantity.
+        /// Doit être strictement positif.
+        /// </summary>
+        [Required]
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal AvgBuyPrice { get; set; }
 
-            // Unicité (PortfolioId, AssetId)
-            bool positionExists = await _context.Position.AnyAsync(p =>
-                p.PortfolioId == input.PortfolioId && p.AssetId == input.AssetId);
+        /// <summary>
+        /// Date du premier achat de cet actif dans ce portefeuille.
+        /// Sert de référence pour les calculs de performance sur période.
+        /// </summary>
+        [Required]
+        public DateTime BuyDate { get; set; }
 
-            if (positionExists) return Conflict("This asset already exists in the portfolio.");
-
-            var position = new Position
-            {
-                PortfolioId = input.PortfolioId,
-                AssetId = input.AssetId,
-                Quantity = input.Quantity,
-                AvgBuyPrice = input.AvgBuyPrice,
-                BuyDate = input.BuyDate,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Position.Add(position);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetPosition),
-                new { portfolioId = position.PortfolioId, assetId = position.AssetId },
-                position);
-        }
-
-        // PUT: api/Positions/{portfolioId}/{assetId}
-        // Update contrôlé : ne change pas les IDs
-        [HttpPut("{portfolioId:int}/{assetId:int}")]
-        public async Task<IActionResult> PutPosition(int portfolioId, int assetId, Position input)
-        {
-            var position = await _context.Position
-                .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId && p.AssetId == assetId);
-
-            if (position == null) return NotFound();
-
-            if (input.Quantity <= 0) return BadRequest("Quantity must be > 0.");
-            if (input.AvgBuyPrice <= 0) return BadRequest("AvgBuyPrice must be > 0.");
-            if (input.BuyDate == default) return BadRequest("BuyDate is required.");
-
-            // Champs autorisés
-            position.Quantity = input.Quantity;
-            position.AvgBuyPrice = input.AvgBuyPrice;
-            position.BuyDate = input.BuyDate;
-
-            // Champs sensibles ignorés : PortfolioId, AssetId, CreatedAt
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        // DELETE: api/Positions/{portfolioId}/{assetId}
-        [HttpDelete("{portfolioId:int}/{assetId:int}")]
-        public async Task<IActionResult> DeletePosition(int portfolioId, int assetId)
-        {
-            var position = await _context.Position
-                .FirstOrDefaultAsync(p => p.PortfolioId == portfolioId && p.AssetId == assetId);
-
-            if (position == null) return NotFound();
-
-            _context.Position.Remove(position);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
+        /// <summary>Date de création de l'enregistrement (UTC, automatique).</summary>
+        [Required]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

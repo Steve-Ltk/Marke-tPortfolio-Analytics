@@ -1,16 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MarketPortfolioAnalytics.Data;
 using MarketPortfolioAnalytics.Models;
-using Microsoft.AspNetCore.Identity;
 
 namespace MarketPortfolioAnalytics.Controllers
 {
+    /// <summary>
+    /// Gestion des utilisateurs de la plateforme.
+    ///
+    /// Règles importantes :
+    ///   - On ne supprime JAMAIS un utilisateur en base (soft delete via IsActive).
+    ///   - Role, CreatedAt et PasswordHash sont toujours imposés par le serveur.
+    ///   - Le mot de passe est toujours hashé avant stockage (PasswordHasher d'ASP.NET Identity).
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class AppUsersController : ControllerBase
@@ -22,83 +26,54 @@ namespace MarketPortfolioAnalytics.Controllers
             _context = context;
         }
 
-        // GET: api/AppUsers
-        // Retourne seulement les utilisateurs actifs
+        // ═══════════════════════════════════════════════════════════════════════
+        // LECTURE
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Retourne la liste de tous les utilisateurs actifs.
+        /// Les utilisateurs désactivés (soft delete) ne sont pas retournés.
+        /// </summary>
+        // GET api/AppUsers
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<AppUser>>> GetAppUser()
+        public async Task<ActionResult<IEnumerable<AppUser>>> GetAll()
         {
             return await _context.AppUser
                 .Where(u => u.IsActive)
                 .ToListAsync();
         }
 
-        // GET: api/AppUsers/5
-        // Ne retourne pas un utilisateur inactif
+        /// <summary>
+        /// Retourne un utilisateur actif par son Id.
+        /// Retourne 404 si l'utilisateur n'existe pas ou est désactivé.
+        /// </summary>
+        // GET api/AppUsers/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<AppUser>> GetAppUser(int id)
+        public async Task<ActionResult<AppUser>> GetById(int id)
         {
-            var appUser = await _context.AppUser
+            var user = await _context.AppUser
                 .FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
 
-            if (appUser == null)
-                return NotFound();
+            if (user is null)
+                return NotFound($"Utilisateur {id} introuvable ou inactif.");
 
-            return appUser;
+            return user;
         }
 
-
-        // PUT: api/AppUsers/5
-        // Mise à jour contrôlée : le client ne peut pas modifier Role / CreatedAt / IsActive
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutAppUser(int id, AppUser input)
-        {
-            var user = await _context.AppUser.FindAsync(id);
-            if (user == null) return NotFound();
-
-            // Option: empêche de modifier un user déjà désactivé
-            if (!user.IsActive) return BadRequest("User is inactive.");
-
-            // Email obligatoire
-            if (string.IsNullOrWhiteSpace(input.Email))
-                return BadRequest("Email is required.");
-
-            // Email format OK
-            var emailValidator = new EmailAddressAttribute();
-            if (!emailValidator.IsValid(input.Email))
-                return BadRequest("Email format is invalid.");
-
-            // Email unique si l'email change
-            if (!string.Equals(user.Email, input.Email, StringComparison.OrdinalIgnoreCase))
-            {
-                bool emailExists = await _context.AppUser.AnyAsync(u => u.Email == input.Email);
-                if (emailExists)
-                    return BadRequest("Email already exists.");
-
-                user.Email = input.Email;
-            }
-
-            // Champs autorisés
-            user.FullName = input.FullName;
-
-            // Champs sensibles ignorés (même si le client les envoie)
-            // user.Role = user.Role;
-            // user.CreatedAt = user.CreatedAt;
-            // user.IsActive = user.IsActive;
-
-            await _context.SaveChangesAsync();
-            return NoContent();
-        }
-
-
-        // GET: api/AppUsers/5/portfolios
+        /// <summary>
+        /// Retourne tous les portefeuilles appartenant à un utilisateur actif.
+        /// </summary>
+        // GET api/AppUsers/5/portfolios
         [HttpGet("{id}/portfolios")]
-        public async Task<ActionResult<IEnumerable<Portfolio>>> GetUserPortfolios(int id)
+        public async Task<ActionResult<IEnumerable<Portfolio>>> GetPortfolios(int id)
         {
-            // 1) Vérifie que l'utilisateur existe ET est actif
-            var userExists = await _context.AppUser.AnyAsync(u => u.Id == id && u.IsActive);
-            if (!userExists) return NotFound("User not found or inactive.");
+            // Vérification que l'utilisateur existe et est actif
+            bool userExists = await _context.AppUser
+                .AnyAsync(u => u.Id == id && u.IsActive);
 
-            // 2) Retourne ses portefeuilles
+            if (!userExists)
+                return NotFound($"Utilisateur {id} introuvable ou inactif.");
+
             var portfolios = await _context.Portfolio
                 .Where(p => p.UserId == id)
                 .ToListAsync();
@@ -106,43 +81,69 @@ namespace MarketPortfolioAnalytics.Controllers
             return portfolios;
         }
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // CRÉATION
+        // ═══════════════════════════════════════════════════════════════════════
 
-        // POST: api/AppUsers
-        // Création contrôlée : Role/CreatedAt/IsActive imposés par le serveur
+        /// <summary>
+        /// Crée un nouvel utilisateur.
+        ///
+        /// Champs attendus dans le body JSON :
+        ///   - FullName    : nom complet (requis)
+        ///   - Email       : email valide et unique (requis)
+        ///   - Password    : mot de passe en clair, min 8 caractères (requis)
+        ///
+        /// Champs imposés par le serveur (ignorés si fournis par le client) :
+        ///   - Role        → "User" par défaut
+        ///   - IsActive    → true
+        ///   - CreatedAt   → DateTime.UtcNow
+        ///   - PasswordHash → calculé ici à partir de Password
+        /// </summary>
+        // POST api/AppUsers
         [HttpPost]
-        public async Task<ActionResult<AppUser>> PostAppUser(AppUser input)
+        public async Task<ActionResult<AppUser>> Create([FromBody] AppUser input)
         {
+            // ── Validation email ──────────────────────────────────────────────
+            if (string.IsNullOrWhiteSpace(input.FullName))
+                return BadRequest("Le nom complet est requis.");
+
             if (string.IsNullOrWhiteSpace(input.Email))
-                return BadRequest("Email is required.");
+                return BadRequest("L'email est requis.");
 
-            var emailValidator = new EmailAddressAttribute();
-            if (!emailValidator.IsValid(input.Email))
-                return BadRequest("Email format is invalid.");
+            if (!new EmailAddressAttribute().IsValid(input.Email))
+                return BadRequest("Le format de l'email est invalide.");
 
+            // ── Validation mot de passe ───────────────────────────────────────
             if (string.IsNullOrWhiteSpace(input.Password))
-                return BadRequest("Password is required.");
+                return BadRequest("Le mot de passe est requis.");
 
             if (input.Password.Length < 8)
-                return BadRequest("Password must be at least 8 characters.");
+                return BadRequest("Le mot de passe doit contenir au moins 8 caractères.");
 
-            var normalizedEmail = input.Email.Trim().ToLower();
+            // ── Unicité de l'email ────────────────────────────────────────────
+            // On normalise en minuscules pour éviter les doublons "User@example.com" vs "user@example.com"
+            string normalizedEmail = input.Email.Trim().ToLower();
 
-            bool emailExists = await _context.AppUser
-                .AnyAsync(u => u.Email.ToLower() == normalizedEmail);
+            bool emailTaken = await _context.AppUser
+                .AnyAsync(u => u.Email == normalizedEmail);
 
-            if (emailExists)
-                return BadRequest("Email already exists.");
+            if (emailTaken)
+                return Conflict("Un compte existe déjà avec cet email.");
 
+            // ── Construction de l'entité ──────────────────────────────────────
+            // On construit un nouvel objet au lieu de modifier input directement.
+            // Cela garantit que le client ne peut pas imposer Role, IsActive ou CreatedAt.
             var user = new AppUser
             {
-                FullName = input.FullName,
+                FullName = input.FullName?.Trim() ?? string.Empty,
                 Email = normalizedEmail,
-                Role = "User",
+                Role = "User",       // toujours "User" à la création
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Hash du mot de passe
+            // Hash du mot de passe via ASP.NET Identity
+            // PasswordHasher utilise PBKDF2 avec sel aléatoire — sécurisé
             var hasher = new PasswordHasher<AppUser>();
             user.PasswordHash = hasher.HashPassword(user, input.Password);
             user.PasswordUpdatedAt = DateTime.UtcNow;
@@ -150,80 +151,110 @@ namespace MarketPortfolioAnalytics.Controllers
             _context.AppUser.Add(user);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetAppUser), new { id = user.Id }, user);
+            // 201 Created avec l'URL de la ressource créée dans le header Location
+            return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
         }
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // MISE À JOUR
+        // ═══════════════════════════════════════════════════════════════════════
 
-
-        // DELETE: api/AppUsers/5
-        // Soft delete: on désactive au lieu de supprimer
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAppUser(int id)
+        /// <summary>
+        /// Met à jour FullName et/ou Email d'un utilisateur actif.
+        ///
+        /// Champs modifiables : FullName, Email.
+        /// Champs ignorés même si fournis : Role, IsActive, CreatedAt, Password.
+        /// </summary>
+        // PUT api/AppUsers/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(int id, [FromBody] AppUser input)
         {
             var user = await _context.AppUser.FindAsync(id);
-            if (user == null) return NotFound();
 
-            if (!user.IsActive) return NoContent(); // déjà désactivé
+            if (user is null)
+                return NotFound($"Utilisateur {id} introuvable.");
 
-            user.IsActive = false;
+            if (!user.IsActive)
+                return BadRequest("Impossible de modifier un utilisateur inactif.");
+
+            // ── FullName ──────────────────────────────────────────────────────
+            if (!string.IsNullOrWhiteSpace(input.FullName))
+                user.FullName = input.FullName.Trim();
+
+            // ── Email ─────────────────────────────────────────────────────────
+            if (!string.IsNullOrWhiteSpace(input.Email))
+            {
+                if (!new EmailAddressAttribute().IsValid(input.Email))
+                    return BadRequest("Le format de l'email est invalide.");
+
+                string normalized = input.Email.Trim().ToLower();
+
+                // On vérifie l'unicité uniquement si l'email change réellement
+                if (!string.Equals(user.Email, normalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    bool emailTaken = await _context.AppUser
+                        .AnyAsync(u => u.Email == normalized);
+
+                    if (emailTaken)
+                        return Conflict("Un compte existe déjà avec cet email.");
+
+                    user.Email = normalized;
+                }
+            }
+
             await _context.SaveChangesAsync();
-
-            return NoContent();
+            return NoContent(); // 204 : succès sans contenu retourné
         }
 
-
-        // PATCH: api/AppUsers/5/activate
-        [HttpPatch("{id}/activate")]
-        public async Task<IActionResult> ActivateUser(int id)
-        {
-            var user = await _context.AppUser.FindAsync(id);
-            if (user == null)
-                return NotFound();
-
-            if (user.IsActive)
-                return NoContent();
-
-            user.IsActive = true;
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        // PATCH: api/AppUsers/5/role
+        /// <summary>
+        /// Change le rôle d'un utilisateur.
+        /// Valeurs acceptées : "User" ou "Admin".
+        ///
+        /// Route dédiée pour éviter qu'un simple PUT puisse modifier le rôle.
+        /// </summary>
+        // PATCH api/AppUsers/5/role
         [HttpPatch("{id}/role")]
-        public async Task<IActionResult> UpdateUserRole(int id, [FromBody] string role)
+        public async Task<IActionResult> UpdateRole(int id, [FromBody] string role)
         {
             if (string.IsNullOrWhiteSpace(role))
-                return BadRequest("Role is required.");
+                return BadRequest("Le rôle est requis.");
 
             role = role.Trim();
 
             if (role != "User" && role != "Admin")
-                return BadRequest("Role must be 'User' or 'Admin'.");
+                return BadRequest("Le rôle doit être 'User' ou 'Admin'.");
 
             var user = await _context.AppUser.FindAsync(id);
-            if (user == null)
-                return NotFound();
+
+            if (user is null)
+                return NotFound($"Utilisateur {id} introuvable.");
 
             user.Role = role;
             await _context.SaveChangesAsync();
-
             return NoContent();
         }
 
-        // PATCH: api/AppUsers/5/password
+        /// <summary>
+        /// Change le mot de passe d'un utilisateur actif.
+        /// Le nouveau mot de passe est hashé avant stockage.
+        /// </summary>
+        // PATCH api/AppUsers/5/password
         [HttpPatch("{id}/password")]
         public async Task<IActionResult> UpdatePassword(int id, [FromBody] string newPassword)
         {
             if (string.IsNullOrWhiteSpace(newPassword))
-                return BadRequest("Password is required.");
+                return BadRequest("Le mot de passe est requis.");
 
             if (newPassword.Length < 8)
-                return BadRequest("Password must be at least 8 characters.");
+                return BadRequest("Le mot de passe doit contenir au moins 8 caractères.");
 
             var user = await _context.AppUser.FindAsync(id);
-            if (user == null) return NotFound();
-            if (!user.IsActive) return BadRequest("User is inactive.");
+
+            if (user is null)
+                return NotFound($"Utilisateur {id} introuvable.");
+
+            if (!user.IsActive)
+                return BadRequest("Impossible de modifier le mot de passe d'un utilisateur inactif.");
 
             var hasher = new PasswordHasher<AppUser>();
             user.PasswordHash = hasher.HashPassword(user, newPassword);
@@ -233,6 +264,57 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
+        /// <summary>
+        /// Réactive un compte utilisateur désactivé.
+        /// Sans effet si le compte est déjà actif (idempotent).
+        /// </summary>
+        // PATCH api/AppUsers/5/activate
+        [HttpPatch("{id}/activate")]
+        public async Task<IActionResult> Activate(int id)
+        {
+            var user = await _context.AppUser.FindAsync(id);
 
+            if (user is null)
+                return NotFound($"Utilisateur {id} introuvable.");
+
+            // Déjà actif → on retourne 204 sans rien faire (idempotent)
+            if (user.IsActive)
+                return NoContent();
+
+            user.IsActive = true;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // SUPPRESSION (soft delete)
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Désactive un utilisateur (soft delete).
+        /// L'enregistrement reste en base — IsActive passe à false.
+        /// Sans effet si le compte est déjà inactif (idempotent).
+        ///
+        /// On ne supprime jamais un utilisateur en base car :
+        ///   - ses portefeuilles et positions constituent un historique
+        ///   - la contrainte Restrict empêcherait la suppression si des portfolios existent
+        /// </summary>
+        // DELETE api/AppUsers/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var user = await _context.AppUser.FindAsync(id);
+
+            if (user is null)
+                return NotFound($"Utilisateur {id} introuvable.");
+
+            // Déjà inactif → idempotent
+            if (!user.IsActive)
+                return NoContent();
+
+            user.IsActive = false;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
     }
 }
