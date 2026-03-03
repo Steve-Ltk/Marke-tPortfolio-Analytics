@@ -147,10 +147,25 @@ namespace MarketPortfolioAnalytics.Services
             string fromStr = from.ToString("yyyy-MM-dd");
             string toStr = to.ToString("yyyy-MM-dd");
 
-            string url = $"{_opt.BaseUrl}/stable/historical-prices"
-                       + $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}";
+            // ── URL v3 — endpoint compatible plan gratuit FMP ────────────────────
+            // /stable/historical-prices retourne des données vides sur le plan gratuit.
+            // /api/v3/historical-price-full/{symbol} est l'endpoint standard qui fonctionne
+            // sur tous les plans et retourne {"symbol":"AAPL","historical":[...]}
+            // → géré par Format B dans le bloc de détection ci-dessous.
+            string url = $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}"
+                       + $"?from={fromStr}&to={toStr}&apikey={_opt.ApiKey}";
 
+            // URL de secours : si la v3 retourne vide, on tente l'endpoint stable
+            string urlFallback = $"{_opt.BaseUrl}/stable/historical-prices"
+                               + $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}";
+
+            // Tentative avec l'URL principale (v3)
             string? json = await GetJsonAsync(url);
+
+            // Si la v3 échoue (HTTP error ou null), on essaie l'endpoint stable
+            if (json is null)
+                json = await GetJsonAsync(urlFallback);
+
             if (json is null) return new List<FmpHistoricalPrice>();
 
             using var doc = JsonDocument.Parse(json);
@@ -193,13 +208,37 @@ namespace MarketPortfolioAnalytics.Services
                 if (!DateTime.TryParse(dateStr, out var date))
                     continue;
 
-                // "close" est obligatoire — on ignore les lignes sans prix de clôture
-                if (!item.TryGetProperty("close", out var closeEl)
-                    || closeEl.ValueKind != JsonValueKind.Number)
-                    continue;
+                // "close" est obligatoire — on ignore les lignes sans prix de clôture.
+                // FMP peut retourner "close" comme un nombre OU comme une chaîne.
+                // Si "close" est absent, on essaie "adjClose" (FMP v3 fournit les deux).
+                decimal close = 0;
 
-                decimal close = closeEl.GetDecimal();
-                if (close <= 0) continue;
+                string[] closeKeys = { "close", "adjClose", "Close", "AdjClose" };
+                bool closeFound = false;
+                foreach (var key in closeKeys)
+                {
+                    if (!item.TryGetProperty(key, out var closeEl)) continue;
+
+                    if (closeEl.ValueKind == JsonValueKind.Number)
+                    {
+                        close = closeEl.GetDecimal();
+                        closeFound = true;
+                        break;
+                    }
+                    else if (closeEl.ValueKind == JsonValueKind.String)
+                    {
+                        string? s = closeEl.GetString();
+                        if (decimal.TryParse(s, System.Globalization.NumberStyles.Number,
+                            System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                        {
+                            close = parsed;
+                            closeFound = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!closeFound || close <= 0) continue;
 
                 // Les autres champs (open, high, low, volume) sont optionnels
                 decimal? open = ReadDecimal(item, "open");
