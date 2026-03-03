@@ -149,7 +149,16 @@ namespace MarketPortfolioAnalytics.Controllers
             _context.Asset.Add(stock);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetById), new { id = stock.Id }, stock);
+            // ── DeclaredType = typeof(Asset) obligatoire ───────────────────────────
+            // CreatedAtAction ne propage pas automatiquement le type générique de
+            // ActionResult<Asset>. Sans DeclaredType, System.Text.Json sérialise
+            // en Stock (type runtime) sans passer par la configuration polymorphique
+            // d'Asset → le discriminateur "assetType" n'est jamais émis.
+            // Avec DeclaredType = typeof(Asset), STJ détecte que runtimeType != declaredType
+            // et ajoute automatiquement "assetType": "Stock".
+            var stockResult = CreatedAtAction(nameof(GetById), new { id = stock.Id }, stock);
+            stockResult.DeclaredType = typeof(Asset);
+            return stockResult;
         }
 
         /// <summary>
@@ -209,7 +218,11 @@ namespace MarketPortfolioAnalytics.Controllers
             _context.Asset.Add(bond);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetById), new { id = bond.Id }, bond);
+            // Même correction que pour CreateStock — DeclaredType force la sérialisation
+            // polymorphique et l'émission du discriminateur "assetType": "Bond".
+            var bondResult = CreatedAtAction(nameof(GetById), new { id = bond.Id }, bond);
+            bondResult.DeclaredType = typeof(Asset);
+            return bondResult;
         }
 
         // ═══════════════════════════════════════════════════════════════════════

@@ -16,6 +16,10 @@ namespace MarketPortfolioAnalytics.Services
     ///   2. GET /stable/historical-prices?symbol=AAPL&from=2023-01-01&to=2024-01-01&apikey=...
     ///      → Prix historiques journaliers OHLCV.
     ///      → Utilisé pour alimenter la table AssetPrice.
+    ///      → IMPORTANT : FMP peut retourner deux formats selon le plan :
+    ///          - Tableau direct    : [{date, open, high, low, close, volume}, ...]
+    ///          - Objet enveloppé   : {"historical": [...], "symbol": "AAPL"}
+    ///        Les deux formats sont gérés par GetHistoricalPricesAsync.
     ///
     ///   3. GET /stable/company-notes?symbol=T&apikey=...
     ///      → Informations sur les obligations (CouponRate, MaturityDate).
@@ -103,18 +107,29 @@ namespace MarketPortfolioAnalytics.Services
         // ENDPOINT 2 — Prix historiques journaliers
         // GET /stable/historical-prices?symbol={ticker}&from={date}&to={date}&apikey={key}
         //
-        // Réponse FMP (tableau d'objets) :
-        // [
+        // IMPORTANT — Double format de réponse FMP :
+        //
+        //   Format A (tableau direct, plan premium stable) :
+        //   [
+        //     { "date": "2024-01-15", "open": 183.63, "high": 184.26,
+        //       "low": 182.42, "close": 183.31, "volume": 49765800 },
+        //     ...
+        //   ]
+        //
+        //   Format B (objet enveloppé, plan standard) :
         //   {
-        //     "date":   "2024-01-15",
-        //     "open":   183.63,
-        //     "high":   184.26,
-        //     "low":    182.42,
-        //     "close":  183.31,
-        //     "volume": 49765800
-        //   },
-        //   ...
-        // ]
+        //     "symbol": "AAPL",
+        //     "historical": [
+        //       { "date": "2024-01-15", "open": 183.63, ..., "close": 183.31 },
+        //       ...
+        //     ]
+        //   }
+        //
+        // Bug antérieur : le code vérifiait uniquement ValueKind == Array et ignorait
+        // le Format B — résultat : fmpPrices.Count toujours 0 → "Fetched > 0" échec.
+        //
+        // Correction v3 : on détecte automatiquement le format et on extrait
+        // le tableau d'éléments quel que soit l'enveloppe utilisée.
         //
         // Les dates sont retournées du plus récent au plus ancien.
         // On retourne une liste vide si aucune donnée n'est disponible.
@@ -122,6 +137,7 @@ namespace MarketPortfolioAnalytics.Services
 
         /// <summary>
         /// Récupère les prix historiques journaliers d'un actif sur une période.
+        /// Gère les deux formats de réponse FMP (tableau direct ou objet historique).
         /// Utilisé pour alimenter la table AssetPrice lors de la synchronisation.
         /// </summary>
         public async Task<List<FmpHistoricalPrice>> GetHistoricalPricesAsync(
@@ -139,13 +155,38 @@ namespace MarketPortfolioAnalytics.Services
 
             using var doc = JsonDocument.Parse(json);
 
-            // FMP retourne directement un tableau pour cet endpoint
-            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            // ── Détection du format de réponse ────────────────────────────────
+            //
+            // Format A : le root est directement un tableau JSON → on l'utilise tel quel.
+            // Format B : le root est un objet avec une clé "historical" → on extrait ce tableau.
+            // Tout autre format → retour vide.
+            //
+            // Ce double test est nécessaire parce que FMP change de format selon le plan
+            // (stable vs premium) sans que l'URL change.
+
+            JsonElement pricesArray;
+
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                // Format A — tableau direct
+                pricesArray = doc.RootElement;
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object
+                     && doc.RootElement.TryGetProperty("historical", out var hist)
+                     && hist.ValueKind == JsonValueKind.Array)
+            {
+                // Format B — objet avec clé "historical"
+                pricesArray = hist;
+            }
+            else
+            {
+                // Format inconnu ou réponse d'erreur FMP (ex: {"Error Message": "..."})
                 return new List<FmpHistoricalPrice>();
+            }
 
             var prices = new List<FmpHistoricalPrice>();
 
-            foreach (var item in doc.RootElement.EnumerateArray())
+            foreach (var item in pricesArray.EnumerateArray())
             {
                 // "date" est obligatoire — on ignore les lignes sans date valide
                 string? dateStr = ReadString(item, "date");
