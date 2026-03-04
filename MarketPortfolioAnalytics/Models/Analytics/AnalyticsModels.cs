@@ -160,16 +160,13 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public decimal Percentile75 { get; set; }
         public decimal Percentile95 { get; set; }
 
-        // camelCase → "vaR95" — Postman : jsonData.vaR95 ✓
-        // !! NE PAS AJOUTER [JsonPropertyName] ici !!
+        [JsonPropertyName("var95")]
         public decimal VaR95 { get; set; }
 
-        // camelCase → "vaR99" — Postman : jsonData.vaR99 ✓
-        // !! NE PAS AJOUTER [JsonPropertyName] ici !!
+        [JsonPropertyName("var99")]
         public decimal VaR99 { get; set; }
 
-        // camelCase → "cVaR95" — Postman : jsonData.cVaR95 ✓
-        // !! NE PAS AJOUTER [JsonPropertyName] ici !!
+        [JsonPropertyName("cvar95")]
         public decimal CVaR95 { get; set; }
 
         public double ProbabilityOfLossPct { get; set; }
