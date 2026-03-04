@@ -74,7 +74,6 @@ namespace MarketPortfolioAnalytics.Services
             double sigmaDaily = FinancialMath.StdDev(portReturns);
 
             // Dérive corrigée d'Itô : drift = μ - σ²/2
-            // Sans cette correction, la simulation surestimerait le rendement espéré
             double drift = muDaily - 0.5 * sigmaDaily * sigmaDaily;
 
             double initVal = portValues[^1];   // valeur actuelle du portefeuille
@@ -87,7 +86,6 @@ namespace MarketPortfolioAnalytics.Services
             var rng = new Random(42);   // graine fixe → reproductible
 
             // ── Simulation des N chemins sur T jours ──────────────────────────
-            // allPaths[sim][jour] = valeur du portefeuille à ce jour pour cette simulation
             var allPaths = new double[N][];
 
             for (int sim = 0; sim < N; sim++)
@@ -132,28 +130,34 @@ namespace MarketPortfolioAnalytics.Services
                 .OrderBy(v => v)
                 .ToArray();
 
-            // p5Threshold = 5e percentile interpolé (interpolation linéaire)
             double p5Threshold = FinancialMath.Percentile(finalVals, 0.05);
             double p1Threshold = FinancialMath.Percentile(finalVals, 0.01);
 
-            // VaR = perte depuis la valeur initiale jusqu'au percentile bas (positif = perte)
+            // VaR = perte depuis la valeur initiale (positif = perte)
             double rawVar95 = initVal - p5Threshold;
             double rawVar99 = initVal - p1Threshold;
 
-            // CVaR95 = perte moyenne dans les 5% pires scénarios (valeurs ≤ p5Threshold)
-            // On utilise la moyenne des valeurs finales dans la queue gauche.
+            // CVaR95 = perte moyenne dans les 5% pires scénarios
             var tail95 = finalVals.Where(v => v <= p5Threshold).ToArray();
             double rawCvar95 = tail95.Length > 0
                 ? initVal - tail95.Average()
                 : rawVar95;
 
-            // Garantie défensive : CVaR95 >= VaR95 par construction financière
-            // (l'average de la queue est toujours ≤ au seuil du percentile,
-            //  donc la perte CVaR est toujours ≥ à la perte VaR).
-            // Le Math.Max ci-dessous protège contre tout écart de précision flottante.
+            // ── GARANTIE NIVEAU DOUBLE ─────────────────────────────────────────
+            // safeVar95 >= 0 et safeCvar95 >= safeVar95 >= 0 par construction
             double safeVar95 = Math.Max(0.0, rawVar95);
             double safeVar99 = Math.Max(0.0, rawVar99);
             double safeCvar95 = Math.Max(safeVar95, Math.Max(0.0, rawCvar95));
+
+            // ── GARANTIE NIVEAU DECIMAL ────────────────────────────────────────
+            // Double précision flottante → conversion decimal → filet de sécurité final
+            // Assure que CVaR95 >= VaR95 même après conversion de type
+            decimal decVar95 = (decimal)safeVar95;
+            decimal decVar99 = (decimal)safeVar99;
+            decimal decCvar95 = (decimal)safeCvar95;
+
+            // Protection absolue post-conversion : CVaR95 ne peut jamais être < VaR95
+            if (decCvar95 < decVar95) decCvar95 = decVar95;
 
             return new MonteCarloResult
             {
@@ -168,9 +172,9 @@ namespace MarketPortfolioAnalytics.Services
                 Percentile75 = (decimal)FinancialMath.Percentile(finalVals, 0.75),
                 Percentile95 = (decimal)FinancialMath.Percentile(finalVals, 0.95),
 
-                VaR95 = (decimal)safeVar95,
-                VaR99 = (decimal)safeVar99,
-                CVaR95 = (decimal)safeCvar95,
+                VaR95 = decVar95,
+                VaR99 = decVar99,
+                CVaR95 = decCvar95,   // garantit CVaR95 >= VaR95 par les deux niveaux ci-dessus
 
                 ProbabilityOfLossPct = Math.Round(
                     (double)finalVals.Count(v => v < initVal) / N * 100, 2),
@@ -184,10 +188,6 @@ namespace MarketPortfolioAnalytics.Services
 
         // ── Helper privé ──────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Construit un histogramme de fréquences sur un tableau de valeurs triées.
-        /// Divise l'intervalle [min, max] en `buckets` tranches égales.
-        /// </summary>
         private static List<MonteCarloHistogramBucket> BuildHistogram(
             double[] sortedValues, int buckets)
         {

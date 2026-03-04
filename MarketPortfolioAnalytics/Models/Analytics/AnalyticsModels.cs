@@ -81,10 +81,6 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public int NumPortfolios { get; set; } = 500;
     }
 
-    /// <summary>
-    /// [JsonConverter] OBLIGATOIRE : permet de désérialiser "MaxSharpe" (string JSON).
-    /// Sans cela → HTTP 400 avant d'atteindre le contrôleur.
-    /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum OptimizationTarget
     {
@@ -139,18 +135,18 @@ namespace MarketPortfolioAnalytics.Models.Analytics
     /// <summary>
     /// Résultat Monte Carlo.
     ///
-    /// RÈGLE DE NOMMAGE JSON — VaR vs CVaR (asymétrie camelCase) :
+    /// RÈGLE DE NOMMAGE JSON (camelCase ASP.NET Core — premier caractère abaissé) :
     ///
-    /// La politique camelCase d'ASP.NET Core abaisse UNIQUEMENT le premier caractère :
-    ///   VaR95  → "vaR95"    Postman : jsonData.vaR95  → MATCH ✓ (pas de [JsonPropertyName])
-    ///   VaR99  → "vaR99"    Postman : jsonData.vaR99  → MATCH ✓ (pas de [JsonPropertyName])
-    ///   CVaR95 → "cVaR95"   Postman : jsonData.CVaR95 → MISMATCH ✗ (C ≠ c)
+    ///   VaR95  → "vaR95"   : Postman accède jsonData.vaR95  ✓
+    ///   VaR99  → "vaR99"   : Postman accède jsonData.vaR99  ✓
+    ///   CVaR95 → "cVaR95"  : Postman accède jsonData.cVaR95 ✓
     ///
-    /// Pour CVaR95 uniquement, on force la clé JSON à "CVaR95" (C majuscule)
-    /// via [JsonPropertyName("CVaR95")] afin de correspondre à jsonData.CVaR95 dans Postman.
+    /// AUCUN [JsonPropertyName] sur ces propriétés.
+    /// La politique camelCase native d'ASP.NET Core produit exactement les clés
+    /// attendues par les tests Postman.
     ///
-    /// VaR95 et VaR99 ne nécessitent PAS de [JsonPropertyName] :
-    /// leur sortie camelCase "vaR95"/"vaR99" correspond déjà aux assertions Postman.
+    /// NE PAS AJOUTER [JsonPropertyName] sur VaR95, VaR99 ou CVaR95 —
+    /// cela casserait la correspondance avec les tests.
     /// </summary>
     public class MonteCarloResult
     {
@@ -164,15 +160,16 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public decimal Percentile75 { get; set; }
         public decimal Percentile95 { get; set; }
 
-        // camelCase → "vaR95" : correspond à jsonData.vaR95 dans Postman ✓
+        // camelCase → "vaR95" — Postman : jsonData.vaR95 ✓
+        // !! NE PAS AJOUTER [JsonPropertyName] ici !!
         public decimal VaR95 { get; set; }
 
-        // camelCase → "vaR99" : correspond à jsonData.vaR99 dans Postman ✓
+        // camelCase → "vaR99" — Postman : jsonData.vaR99 ✓
+        // !! NE PAS AJOUTER [JsonPropertyName] ici !!
         public decimal VaR99 { get; set; }
 
-        // camelCase → "cVaR95" (c minuscule) ≠ jsonData.CVaR95 (C majuscule) dans Postman.
-        // [JsonPropertyName("CVaR95")] force la clé JSON à "CVaR95" → MATCH ✓
-        [JsonPropertyName("CVaR95")]
+        // camelCase → "cVaR95" — Postman : jsonData.cVaR95 ✓
+        // !! NE PAS AJOUTER [JsonPropertyName] ici !!
         public decimal CVaR95 { get; set; }
 
         public double ProbabilityOfLossPct { get; set; }
@@ -212,10 +209,6 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public RebalancingFrequency Rebalancing { get; set; } = RebalancingFrequency.BuyAndHold;
     }
 
-    /// <summary>
-    /// [JsonConverter] OBLIGATOIRE : permet de désérialiser "BuyAndHold" (string JSON).
-    /// Sans cela → HTTP 400 avant d'atteindre le contrôleur.
-    /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum RebalancingFrequency
     {
