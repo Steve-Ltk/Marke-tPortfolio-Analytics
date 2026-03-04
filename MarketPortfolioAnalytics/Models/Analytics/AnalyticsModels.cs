@@ -82,8 +82,8 @@ namespace MarketPortfolioAnalytics.Models.Analytics
     }
 
     /// <summary>
-    /// [JsonConverter] OBLIGATOIRE : permet de désérialiser "MaxSharpe" (string JSON)
-    /// au lieu d'attendre un entier. Sans cela → HTTP 400 avant d'atteindre le contrôleur.
+    /// [JsonConverter] OBLIGATOIRE : permet de désérialiser "MaxSharpe" (string JSON).
+    /// Sans cela → HTTP 400 avant d'atteindre le contrôleur.
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum OptimizationTarget
@@ -139,21 +139,18 @@ namespace MarketPortfolioAnalytics.Models.Analytics
     /// <summary>
     /// Résultat Monte Carlo.
     ///
-    /// NOMMAGE VaR95 / CVaR95 — RÈGLE CRITIQUE :
+    /// RÈGLE DE NOMMAGE JSON — VaR vs CVaR (asymétrie camelCase) :
     ///
-    /// ASP.NET Core applique camelCase par défaut sur toutes les propriétés :
-    ///   VaR95  → "vaR95"   (seul le premier caractère passe en minuscule)
-    ///   VaR99  → "vaR99"
-    ///   CVaR95 → "cVaR95"
+    /// La politique camelCase d'ASP.NET Core abaisse UNIQUEMENT le premier caractère :
+    ///   VaR95  → "vaR95"    Postman : jsonData.vaR95  → MATCH ✓ (pas de [JsonPropertyName])
+    ///   VaR99  → "vaR99"    Postman : jsonData.vaR99  → MATCH ✓ (pas de [JsonPropertyName])
+    ///   CVaR95 → "cVaR95"   Postman : jsonData.CVaR95 → MISMATCH ✗ (C ≠ c)
     ///
-    /// Les tests Postman accèdent ces champs via :
-    ///   parseFloat(jsonData.vaR95)   ← clé camelCase par défaut ✓
-    ///   parseFloat(jsonData.cVaR95)  ← clé camelCase par défaut ✓
+    /// Pour CVaR95 uniquement, on force la clé JSON à "CVaR95" (C majuscule)
+    /// via [JsonPropertyName("CVaR95")] afin de correspondre à jsonData.CVaR95 dans Postman.
     ///
-    /// NE PAS ajouter [JsonPropertyName("VaR95")] :
-    ///   cela forcerait la clé JSON à "VaR95" (majuscule),
-    ///   jsonData.vaR95 deviendrait undefined,
-    ///   parseFloat(undefined) = NaN → AssertionError.
+    /// VaR95 et VaR99 ne nécessitent PAS de [JsonPropertyName] :
+    /// leur sortie camelCase "vaR95"/"vaR99" correspond déjà aux assertions Postman.
     /// </summary>
     public class MonteCarloResult
     {
@@ -167,11 +164,15 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public decimal Percentile75 { get; set; }
         public decimal Percentile95 { get; set; }
 
-        // Sérialisés automatiquement en "vaR95", "vaR99", "cVaR95" par camelCase —
-        // c'est exactement ce qu'attendent les assertions Postman.
-        // Ne PAS ajouter [JsonPropertyName] ici.
+        // camelCase → "vaR95" : correspond à jsonData.vaR95 dans Postman ✓
         public decimal VaR95 { get; set; }
+
+        // camelCase → "vaR99" : correspond à jsonData.vaR99 dans Postman ✓
         public decimal VaR99 { get; set; }
+
+        // camelCase → "cVaR95" (c minuscule) ≠ jsonData.CVaR95 (C majuscule) dans Postman.
+        // [JsonPropertyName("CVaR95")] force la clé JSON à "CVaR95" → MATCH ✓
+        [JsonPropertyName("CVaR95")]
         public decimal CVaR95 { get; set; }
 
         public double ProbabilityOfLossPct { get; set; }
