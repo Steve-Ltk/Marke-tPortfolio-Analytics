@@ -7,25 +7,17 @@ namespace MarketPortfolioAnalytics.Services
     /// <summary>
     /// Service d'accès à l'API Financial Modeling Prep (FMP).
     ///
-    /// Endpoints utilisés (tous sur /stable/) :
+    /// Endpoints utilisés :
     ///
     ///   1. GET /stable/profile?symbol=AAPL&apikey=...
     ///      → Profil d'un actif : nom, devise, place de cotation, secteur, ISIN.
-    ///      → Utilisé pour valider un ticker et créer un Stock ou un Bond.
     ///
-    ///   2. GET /stable/historical-prices?symbol=AAPL&from=2023-01-01&to=2024-01-01&apikey=...
+    ///   2. GET /api/v3/historical-price-full/{symbol}?from=...&to=...&apikey=...
     ///      → Prix historiques journaliers OHLCV.
-    ///      → Utilisé pour alimenter la table AssetPrice.
-    ///      → IMPORTANT : FMP peut retourner deux formats selon le plan :
-    ///          - Tableau direct    : [{date, open, high, low, close, volume}, ...]
-    ///          - Objet enveloppé   : {"historical": [...], "symbol": "AAPL"}
-    ///        Les deux formats sont gérés par GetHistoricalPricesAsync.
+    ///      → Stratégie 3-URLs avec filtrage local de date pour compatibilité plan gratuit.
     ///
     ///   3. GET /stable/company-notes?symbol=T&apikey=...
     ///      → Informations sur les obligations (CouponRate, MaturityDate).
-    ///      → FMP ne fournit pas ces données dans un format structuré sur le plan gratuit.
-    ///      → On les extrait du champ "title" avec des expressions régulières.
-    ///      → Peut retourner null si l'information n'est pas disponible.
     /// </summary>
     public class FmpService
     {
@@ -40,28 +32,8 @@ namespace MarketPortfolioAnalytics.Services
 
         // ═══════════════════════════════════════════════════════════════════════
         // ENDPOINT 1 — Profil d'un actif
-        // GET /stable/profile?symbol={ticker}&apikey={key}
-        //
-        // Réponse FMP (tableau d'objets) :
-        // [
-        //   {
-        //     "symbol":           "AAPL",
-        //     "companyName":      "Apple Inc.",
-        //     "currency":         "USD",
-        //     "exchangeShortName":"NASDAQ",
-        //     "sector":           "Technology",
-        //     "isin":             "US0378331005",
-        //     ...
-        //   }
-        // ]
-        //
-        // Retourne null si le ticker est inconnu ou si FMP retourne une erreur.
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Récupère le profil complet d'un actif depuis FMP.
-        /// Utilisé lors de la création d'un Stock ou d'un Bond.
-        /// </summary>
         public async Task<FmpProfile?> GetProfileAsync(string ticker)
         {
             string symbol = ticker.Trim().ToUpper();
@@ -70,76 +42,75 @@ namespace MarketPortfolioAnalytics.Services
             string? json = await GetJsonAsync(url);
             if (json is null) return null;
 
-            using var doc = JsonDocument.Parse(json);
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
 
-            // FMP retourne un tableau — on prend le premier élément
-            if (doc.RootElement.ValueKind != JsonValueKind.Array
-                || doc.RootElement.GetArrayLength() == 0)
+                if (doc.RootElement.ValueKind != JsonValueKind.Array
+                    || doc.RootElement.GetArrayLength() == 0)
+                    return null;
+
+                var item = doc.RootElement[0];
+
+                string? sym = ReadString(item, "symbol");
+                string? name = ReadString(item, "companyName") ?? ReadString(item, "name");
+                string? currency = ReadString(item, "currency");
+                string? exchange = ReadString(item, "exchangeShortName") ?? ReadString(item, "exchange");
+                string? sector = ReadString(item, "sector");
+                string? isin = ReadString(item, "isin");
+
+                if (string.IsNullOrWhiteSpace(sym)
+                    || string.IsNullOrWhiteSpace(name)
+                    || string.IsNullOrWhiteSpace(currency))
+                    return null;
+
+                return new FmpProfile(
+                    Symbol: sym.Trim().ToUpper(),
+                    Name: name.Trim(),
+                    Currency: currency.Trim().ToUpper(),
+                    Exchange: string.IsNullOrWhiteSpace(exchange) ? null : exchange.Trim(),
+                    Sector: string.IsNullOrWhiteSpace(sector) ? null : sector.Trim(),
+                    Isin: string.IsNullOrWhiteSpace(isin) ? null : isin.Trim()
+                );
+            }
+            catch (JsonException)
+            {
                 return null;
-
-            var item = doc.RootElement[0];
-
-            // Lecture des champs — on tolère l'absence de certains champs optionnels
-            string? sym = ReadString(item, "symbol");
-            string? name = ReadString(item, "companyName") ?? ReadString(item, "name");
-            string? currency = ReadString(item, "currency");
-            string? exchange = ReadString(item, "exchangeShortName") ?? ReadString(item, "exchange");
-            string? sector = ReadString(item, "sector");
-            string? isin = ReadString(item, "isin");
-
-            // Symbol, Name et Currency sont obligatoires pour créer un actif
-            if (string.IsNullOrWhiteSpace(sym)
-                || string.IsNullOrWhiteSpace(name)
-                || string.IsNullOrWhiteSpace(currency))
-                return null;
-
-            return new FmpProfile(
-                Symbol: sym.Trim().ToUpper(),
-                Name: name.Trim(),
-                Currency: currency.Trim().ToUpper(),
-                Exchange: string.IsNullOrWhiteSpace(exchange) ? null : exchange.Trim(),
-                Sector: string.IsNullOrWhiteSpace(sector) ? null : sector.Trim(),
-                Isin: string.IsNullOrWhiteSpace(isin) ? null : isin.Trim()
-            );
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
         // ENDPOINT 2 — Prix historiques journaliers
-        // GET /stable/historical-prices?symbol={ticker}&from={date}&to={date}&apikey={key}
         //
-        // IMPORTANT — Double format de réponse FMP :
+        // STRATÉGIE 3-URLs pour compatibilité maximum avec le plan gratuit FMP :
         //
-        //   Format A (tableau direct, plan premium stable) :
-        //   [
-        //     { "date": "2024-01-15", "open": 183.63, "high": 184.26,
-        //       "low": 182.42, "close": 183.31, "volume": 49765800 },
-        //     ...
-        //   ]
+        //   URL 1 : v3 avec filtrage serveur (from/to) — optimal
+        //           /api/v3/historical-price-full/{symbol}?from=...&to=...&apikey=...
         //
-        //   Format B (objet enveloppé, plan standard) :
-        //   {
-        //     "symbol": "AAPL",
-        //     "historical": [
-        //       { "date": "2024-01-15", "open": 183.63, ..., "close": 183.31 },
-        //       ...
-        //     ]
-        //   }
+        //   URL 2 : v3 SANS filtrage de date — fallback plan gratuit
+        //           /api/v3/historical-price-full/{symbol}?apikey=...
+        //           → Le plan gratuit peut ignorer/rejeter les paramètres from/to.
+        //             Dans ce cas on récupère tout et on filtre localement.
         //
-        // Bug antérieur : le code vérifiait uniquement ValueKind == Array et ignorait
-        // le Format B — résultat : fmpPrices.Count toujours 0 → "Fetched > 0" échec.
+        //   URL 3 : endpoint stable — dernier recours
+        //           /stable/historical-prices?symbol=...&from=...&to=...&apikey=...
         //
-        // Correction v3 : on détecte automatiquement le format et on extrait
-        // le tableau d'éléments quel que soit l'enveloppe utilisée.
+        // FORMATS DE RÉPONSE FMP GÉRÉS :
         //
-        // Les dates sont retournées du plus récent au plus ancien.
-        // On retourne une liste vide si aucune donnée n'est disponible.
+        //   Format A — tableau direct (stable, plan premium) :
+        //   [{date, open, high, low, close, volume}, ...]
+        //
+        //   Format B — objet avec "historical" (v3, standard) :
+        //   {"symbol": "AAPL", "historical": [{...}]}
+        //
+        //   Format C — objet avec "historicalStockList" (v3, multi-symboles) :
+        //   {"historicalStockList": [{"symbol": "AAPL", "historical": [{...}]}]}
+        //
+        // FILTRAGE DE DATE :
+        //   Toujours appliqué LOCALEMENT après parsing pour garantir la cohérence
+        //   même si le serveur n'a pas filtré (URL 2).
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Récupère les prix historiques journaliers d'un actif sur une période.
-        /// Gère les deux formats de réponse FMP (tableau direct ou objet historique).
-        /// Utilisé pour alimenter la table AssetPrice lors de la synchronisation.
-        /// </summary>
         public async Task<List<FmpHistoricalPrice>> GetHistoricalPricesAsync(
             string ticker, DateTime from, DateTime to)
         {
@@ -147,135 +118,187 @@ namespace MarketPortfolioAnalytics.Services
             string fromStr = from.ToString("yyyy-MM-dd");
             string toStr = to.ToString("yyyy-MM-dd");
 
-            // ── URL v3 — endpoint compatible plan gratuit FMP ────────────────────
-            // /stable/historical-prices retourne des données vides sur le plan gratuit.
-            // /api/v3/historical-price-full/{symbol} est l'endpoint standard qui fonctionne
-            // sur tous les plans et retourne {"symbol":"AAPL","historical":[...]}
-            // → géré par Format B dans le bloc de détection ci-dessous.
-            string url = $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}"
-                       + $"?from={fromStr}&to={toStr}&apikey={_opt.ApiKey}";
-
-            // URL de secours : si la v3 retourne vide, on tente l'endpoint stable
-            string urlFallback = $"{_opt.BaseUrl}/stable/historical-prices"
-                               + $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}";
-
-            // Tentative avec l'URL principale (v3)
-            string? json = await GetJsonAsync(url);
-
-            // Si la v3 échoue (HTTP error ou null), on essaie l'endpoint stable
-            if (json is null)
-                json = await GetJsonAsync(urlFallback);
-
-            if (json is null) return new List<FmpHistoricalPrice>();
-
-            using var doc = JsonDocument.Parse(json);
-
-            // ── Détection du format de réponse ────────────────────────────────
+            // STRATÉGIE 4 URLs — essayées dans l'ordre, arrêt à la première qui retourne des données.
             //
-            // Format A : le root est directement un tableau JSON → on l'utilise tel quel.
-            // Format B : le root est un objet avec une clé "historical" → on extrait ce tableau.
-            // Tout autre format → retour vide.
+            // URL 1 : endpoint stable/eod/light — CONFIRMÉ fonctionnel sur le plan gratuit.
+            //         Format : [{symbol, date, price, volume}]  ← champ "price" et non "close" !
             //
-            // Ce double test est nécessaire parce que FMP change de format selon le plan
-            // (stable vs premium) sans que l'URL change.
-
-            JsonElement pricesArray;
-
-            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            // URL 2 : endpoint stable/historical-prices — ancien endpoint stable
+            //         Format : [{symbol, date, price, volume}]  (même format que URL 1)
+            //
+            // URL 3 : v3 avec filtrage serveur — endpoint standard FMP
+            //         Format : {"symbol":"AAPL","historical":[{date, open, high, low, close, ...}]}
+            //
+            // URL 4 : v3 sans date — le plan gratuit peut ignorer from/to ; on filtre localement
+            //         Format : identique à URL 3
+            var urls = new[]
             {
-                // Format A — tableau direct
-                pricesArray = doc.RootElement;
+                // URL 1 — endpoint EOD light (plan gratuit confirmé, champ "price")
+                $"{_opt.BaseUrl}/stable/historical-price-eod/light" +
+                    $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
+
+                // URL 2 — endpoint stable classique (même format que URL 1)
+                $"{_opt.BaseUrl}/stable/historical-prices" +
+                    $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
+
+                // URL 3 — v3 avec dates (champ "close" dans un objet "historical")
+                $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}" +
+                    $"?from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
+
+                // URL 4 — v3 sans dates (fallback si le plan gratuit ignore from/to)
+                $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}" +
+                    $"?apikey={_opt.ApiKey}",
+            };
+
+            foreach (var url in urls)
+            {
+                string? json = await GetJsonAsync(url);
+                if (json is null) continue;
+
+                var parsed = ParseHistoricalPrices(json);
+
+                // Filtrage local par plage de dates — indispensable pour l'URL 4 (sans dates)
+                var inRange = parsed
+                    .Where(p => p.Date >= from.Date && p.Date <= to.Date)
+                    .ToList();
+
+                if (inRange.Count > 0)
+                    return inRange;
             }
-            else if (doc.RootElement.ValueKind == JsonValueKind.Object
-                     && doc.RootElement.TryGetProperty("historical", out var hist)
-                     && hist.ValueKind == JsonValueKind.Array)
+
+            return new List<FmpHistoricalPrice>();
+        }
+
+        /// <summary>
+        /// Parse un corps JSON FMP et retourne les prix historiques.
+        ///
+        /// FORMATS GÉRÉS :
+        ///
+        ///   Format A — tableau direct avec champ "price" (endpoint /stable/historical-price-eod/light) :
+        ///   [{"symbol":"AAPL", "date":"2023-12-29", "price":192.53, "volume":42672148}, ...]
+        ///
+        ///   Format B — tableau direct avec champ "close" (autres endpoints stable) :
+        ///   [{"date":"2024-01-15", "open":183.63, "high":184.26, "low":182.42, "close":183.31}, ...]
+        ///
+        ///   Format C — objet avec "historical" (v3 standard) :
+        ///   {"symbol":"AAPL", "historical":[{date, open, high, low, close, ...}]}
+        ///
+        ///   Format D — objet avec "historicalStockList" (v3 multi-symboles) :
+        ///   {"historicalStockList":[{"symbol":"AAPL","historical":[...]}]}
+        ///
+        /// Retourne une liste vide en cas d'erreur de parsing.
+        /// </summary>
+        private List<FmpHistoricalPrice> ParseHistoricalPrices(string json)
+        {
+            try
             {
-                // Format B — objet avec clé "historical"
-                pricesArray = hist;
-            }
-            else
-            {
-                // Format inconnu ou réponse d'erreur FMP (ex: {"Error Message": "..."})
-                return new List<FmpHistoricalPrice>();
-            }
+                using var doc = JsonDocument.Parse(json);
+                JsonElement pricesArray;
 
-            var prices = new List<FmpHistoricalPrice>();
-
-            foreach (var item in pricesArray.EnumerateArray())
-            {
-                // "date" est obligatoire — on ignore les lignes sans date valide
-                string? dateStr = ReadString(item, "date");
-                if (!DateTime.TryParse(dateStr, out var date))
-                    continue;
-
-                // "close" est obligatoire — on ignore les lignes sans prix de clôture.
-                // FMP peut retourner "close" comme un nombre OU comme une chaîne.
-                // Si "close" est absent, on essaie "adjClose" (FMP v3 fournit les deux).
-                decimal close = 0;
-
-                string[] closeKeys = { "close", "adjClose", "Close", "AdjClose" };
-                bool closeFound = false;
-                foreach (var key in closeKeys)
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
                 {
-                    if (!item.TryGetProperty(key, out var closeEl)) continue;
-
-                    if (closeEl.ValueKind == JsonValueKind.Number)
+                    // Format A ou B — tableau direct
+                    pricesArray = doc.RootElement;
+                }
+                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    if (doc.RootElement.TryGetProperty("historical", out var hist)
+                        && hist.ValueKind == JsonValueKind.Array)
                     {
-                        close = closeEl.GetDecimal();
-                        closeFound = true;
-                        break;
+                        // Format C — {"symbol":"AAPL","historical":[...]}
+                        pricesArray = hist;
                     }
-                    else if (closeEl.ValueKind == JsonValueKind.String)
+                    else if (doc.RootElement.TryGetProperty("historicalStockList", out var stockList)
+                             && stockList.ValueKind == JsonValueKind.Array
+                             && stockList.GetArrayLength() > 0
+                             && stockList[0].TryGetProperty("historical", out var innerHist)
+                             && innerHist.ValueKind == JsonValueKind.Array)
                     {
-                        string? s = closeEl.GetString();
-                        if (decimal.TryParse(s, System.Globalization.NumberStyles.Number,
-                            System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                        // Format D — {"historicalStockList":[{"symbol":"AAPL","historical":[...]}]}
+                        pricesArray = innerHist;
+                    }
+                    else
+                    {
+                        // Réponse d'erreur FMP : {"Error Message":"Limit Reach."} ou similaire
+                        return new List<FmpHistoricalPrice>();
+                    }
+                }
+                else
+                {
+                    return new List<FmpHistoricalPrice>();
+                }
+
+                var prices = new List<FmpHistoricalPrice>();
+
+                foreach (var item in pricesArray.EnumerateArray())
+                {
+                    // "date" obligatoire
+                    string? dateStr = ReadString(item, "date");
+                    if (!DateTime.TryParse(dateStr, out var date))
+                        continue;
+
+                    // Prix de clôture : essaie "price" EN PREMIER (format EOD light),
+                    // puis "close", "adjClose" et variantes (formats v3 et stable classique).
+                    // FMP peut retourner ces valeurs comme nombre ou comme chaîne.
+                    decimal close = 0;
+                    bool closeFound = false;
+
+                    string[] priceKeys = { "price", "close", "adjClose", "Close", "AdjClose", "Price" };
+                    foreach (var key in priceKeys)
+                    {
+                        if (!item.TryGetProperty(key, out var priceEl)) continue;
+
+                        if (priceEl.ValueKind == JsonValueKind.Number)
                         {
-                            close = parsed;
+                            close = priceEl.GetDecimal();
                             closeFound = true;
                             break;
                         }
+                        else if (priceEl.ValueKind == JsonValueKind.String)
+                        {
+                            string? s = priceEl.GetString();
+                            if (decimal.TryParse(s,
+                                System.Globalization.NumberStyles.Number,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out var parsed))
+                            {
+                                close = parsed;
+                                closeFound = true;
+                                break;
+                            }
+                        }
                     }
+
+                    if (!closeFound || close <= 0) continue;
+
+                    // Champs OHLC optionnels (absents du format EOD light)
+                    decimal? open = ReadDecimal(item, "open");
+                    decimal? high = ReadDecimal(item, "high");
+                    decimal? low = ReadDecimal(item, "low");
+                    long? volume = ReadLong(item, "volume");
+
+                    prices.Add(new FmpHistoricalPrice(
+                        Date: date.Date,
+                        Open: open,
+                        High: high,
+                        Low: low,
+                        Close: close,
+                        Volume: volume
+                    ));
                 }
 
-                if (!closeFound || close <= 0) continue;
-
-                // Les autres champs (open, high, low, volume) sont optionnels
-                decimal? open = ReadDecimal(item, "open");
-                decimal? high = ReadDecimal(item, "high");
-                decimal? low = ReadDecimal(item, "low");
-                long? volume = ReadLong(item, "volume");
-
-                prices.Add(new FmpHistoricalPrice(
-                    Date: date.Date,
-                    Open: open,
-                    High: high,
-                    Low: low,
-                    Close: close,
-                    Volume: volume
-                ));
+                return prices;
             }
-
-            return prices;
+            catch (JsonException)
+            {
+                return new List<FmpHistoricalPrice>();
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
         // ENDPOINT 3 — Informations obligation
-        // GET /stable/company-notes?symbol={ticker}&apikey={key}
-        //
-        // FMP ne propose pas d'endpoint dédié aux obligations sur le plan gratuit.
-        // On interroge "company-notes" qui liste les titres des notes de l'entreprise.
-        // Ces titres contiennent parfois le taux et la date d'échéance sous la forme :
-        //   "4.35% Notes due September 15, 2028"
-        //
-        // On extrait ces informations avec des expressions régulières.
-        // Cette approche est fragile et peut retourner null — c'est documenté et accepté.
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Tente de récupérer le taux de coupon et la date d'échéance d'une obligation.
-        /// Retourne null si l'information n'est pas disponible.
-        /// </summary>
         public async Task<FmpBondInfo?> GetBondAsync(string ticker)
         {
             string symbol = ticker.Trim().ToUpper();
@@ -284,68 +307,63 @@ namespace MarketPortfolioAnalytics.Services
             string? json = await GetJsonAsync(url);
             if (json is null) return null;
 
-            using var doc = JsonDocument.Parse(json);
-
-            if (doc.RootElement.ValueKind != JsonValueKind.Array
-                || doc.RootElement.GetArrayLength() == 0)
-                return null;
-
-            // On cherche le titre le plus informatif (celui qui contient "%" et une année)
-            string? bestTitle = null;
-            foreach (var item in doc.RootElement.EnumerateArray())
+            try
             {
-                string? title = ReadString(item, "title");
-                if (string.IsNullOrWhiteSpace(title)) continue;
+                using var doc = JsonDocument.Parse(json);
 
-                // On préfère un titre qui contient à la fois un taux (%) et une date
-                if (title.Contains('%') && Regex.IsMatch(title, @"\b20\d{2}\b"))
+                if (doc.RootElement.ValueKind != JsonValueKind.Array
+                    || doc.RootElement.GetArrayLength() == 0)
+                    return null;
+
+                string? bestTitle = null;
+                foreach (var item in doc.RootElement.EnumerateArray())
                 {
-                    bestTitle = title;
-                    break;
+                    string? title = ReadString(item, "title");
+                    if (string.IsNullOrWhiteSpace(title)) continue;
+
+                    if (title.Contains('%') && Regex.IsMatch(title, @"\b20\d{2}\b"))
+                    {
+                        bestTitle = title;
+                        break;
+                    }
+                    bestTitle ??= title;
                 }
 
-                bestTitle ??= title; // garde le premier trouvé en fallback
+                if (bestTitle is null) return null;
+
+                decimal? couponRate = ParseCouponRate(bestTitle);
+                DateTime? maturityDate = ParseMaturityDate(bestTitle);
+
+                if (couponRate is null && maturityDate is null)
+                    return null;
+
+                return new FmpBondInfo(couponRate, maturityDate);
             }
-
-            if (bestTitle is null) return null;
-
-            decimal? couponRate = ParseCouponRate(bestTitle);
-            DateTime? maturityDate = ParseMaturityDate(bestTitle);
-
-            // Retourne null si on n'a pu extraire aucune information utile
-            if (couponRate is null && maturityDate is null)
+            catch (JsonException)
+            {
                 return null;
-
-            return new FmpBondInfo(couponRate, maturityDate);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
         // HELPERS PRIVÉS
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Effectue un appel HTTP GET et retourne le corps de la réponse en string.
-        /// Retourne null en cas d'erreur HTTP ou d'exception réseau.
-        /// </summary>
         private async Task<string?> GetJsonAsync(string url)
         {
             try
             {
                 var response = await _http.GetAsync(url);
-
                 if (!response.IsSuccessStatusCode)
                     return null;
-
                 return await response.Content.ReadAsStringAsync();
             }
             catch (HttpRequestException)
             {
-                // Erreur réseau (timeout, DNS...) → on retourne null proprement
                 return null;
             }
         }
 
-        /// <summary>Lit un champ string depuis un JsonElement, retourne null si absent.</summary>
         private static string? ReadString(JsonElement el, string property)
         {
             if (el.TryGetProperty(property, out var prop)
@@ -354,7 +372,6 @@ namespace MarketPortfolioAnalytics.Services
             return null;
         }
 
-        /// <summary>Lit un champ decimal depuis un JsonElement, retourne null si absent.</summary>
         private static decimal? ReadDecimal(JsonElement el, string property)
         {
             if (el.TryGetProperty(property, out var prop)
@@ -363,7 +380,6 @@ namespace MarketPortfolioAnalytics.Services
             return null;
         }
 
-        /// <summary>Lit un champ long depuis un JsonElement, retourne null si absent.</summary>
         private static long? ReadLong(JsonElement el, string property)
         {
             if (el.TryGetProperty(property, out var prop)
@@ -372,14 +388,8 @@ namespace MarketPortfolioAnalytics.Services
             return null;
         }
 
-        /// <summary>
-        /// Extrait un taux de coupon d'un titre textuel.
-        /// Exemples reconnus : "4.35%", "5%", "0.5%"
-        /// </summary>
         private static decimal? ParseCouponRate(string text)
         {
-            // Capture un nombre (entier ou décimal) suivi de "%"
-            // Exemple : "4.35% Notes due..." → 4.35
             var match = Regex.Match(text,
                 @"(?<!\d)(\d{1,2}(\.\d{1,4})?)\s*%",
                 RegexOptions.IgnoreCase);
@@ -396,21 +406,12 @@ namespace MarketPortfolioAnalytics.Services
             return null;
         }
 
-        /// <summary>
-        /// Extrait une date d'échéance d'un titre textuel.
-        /// Formats reconnus :
-        ///   - ISO : "2028-09-15"
-        ///   - Littéral : "September 15, 2028" ou "Sep 15 2028"
-        ///   - Année seule : "2028" (fallback → 31 décembre de l'année)
-        /// </summary>
         private static DateTime? ParseMaturityDate(string text)
         {
-            // Format ISO : 2028-09-15
             var iso = Regex.Match(text, @"\b(20\d{2})-(\d{2})-(\d{2})\b");
             if (iso.Success && DateTime.TryParse(iso.Value, out var d1))
                 return d1.Date;
 
-            // Format littéral : "September 15, 2028" ou "Sep 15 2028"
             var literal = Regex.Match(text,
                 @"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}\b",
                 RegexOptions.IgnoreCase);
@@ -422,7 +423,6 @@ namespace MarketPortfolioAnalytics.Services
                 out var d2))
                 return d2.Date;
 
-            // Fallback : année seule → 31 décembre
             var yearOnly = Regex.Match(text, @"\b(20\d{2})\b");
             if (yearOnly.Success && int.TryParse(yearOnly.Value, out int year))
                 return new DateTime(year, 12, 31);
@@ -432,14 +432,9 @@ namespace MarketPortfolioAnalytics.Services
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // RECORDS — structures de données retournées par FmpService
-    // On utilise des records (C# 9+) : immutables, concis, parfaits pour des DTOs
+    // RECORDS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Profil d'un actif retourné par FMP (/stable/profile).
-    /// Contient les métadonnées nécessaires à la création d'un Stock ou d'un Bond.
-    /// </summary>
     public record FmpProfile(
         string Symbol,
         string Name,
@@ -449,10 +444,6 @@ namespace MarketPortfolioAnalytics.Services
         string? Isin
     );
 
-    /// <summary>
-    /// Prix journalier d'un actif retourné par FMP (/stable/historical-prices).
-    /// Correspond exactement aux champs de la table AssetPrice.
-    /// </summary>
     public record FmpHistoricalPrice(
         DateTime Date,
         decimal? Open,
@@ -462,10 +453,6 @@ namespace MarketPortfolioAnalytics.Services
         long? Volume
     );
 
-    /// <summary>
-    /// Informations spécifiques à une obligation, extraites de FMP (/stable/company-notes).
-    /// Peut être partielle (un seul des deux champs renseigné).
-    /// </summary>
     public record FmpBondInfo(
         decimal? CouponRate,
         DateTime? MaturityDate
