@@ -132,15 +132,28 @@ namespace MarketPortfolioAnalytics.Services
                 .OrderBy(v => v)
                 .ToArray();
 
-            double var95 = initVal - FinancialMath.Percentile(finalVals, 0.05);
-            double var99 = initVal - FinancialMath.Percentile(finalVals, 0.01);
-
-            // CVaR95 : moyenne des valeurs finales dans les 5% pires scénarios
+            // p5Threshold = 5e percentile interpolé (interpolation linéaire)
             double p5Threshold = FinancialMath.Percentile(finalVals, 0.05);
-            var tail = finalVals.Where(v => v <= p5Threshold).ToArray();
-            double cvar95 = tail.Length > 0
-                ? initVal - tail.Average()
-                : var95;
+            double p1Threshold = FinancialMath.Percentile(finalVals, 0.01);
+
+            // VaR = perte depuis la valeur initiale jusqu'au percentile bas (positif = perte)
+            double rawVar95 = initVal - p5Threshold;
+            double rawVar99 = initVal - p1Threshold;
+
+            // CVaR95 = perte moyenne dans les 5% pires scénarios (valeurs ≤ p5Threshold)
+            // On utilise la moyenne des valeurs finales dans la queue gauche.
+            var tail95 = finalVals.Where(v => v <= p5Threshold).ToArray();
+            double rawCvar95 = tail95.Length > 0
+                ? initVal - tail95.Average()
+                : rawVar95;
+
+            // Garantie défensive : CVaR95 >= VaR95 par construction financière
+            // (l'average de la queue est toujours ≤ au seuil du percentile,
+            //  donc la perte CVaR est toujours ≥ à la perte VaR).
+            // Le Math.Max ci-dessous protège contre tout écart de précision flottante.
+            double safeVar95 = Math.Max(0.0, rawVar95);
+            double safeVar99 = Math.Max(0.0, rawVar99);
+            double safeCvar95 = Math.Max(safeVar95, Math.Max(0.0, rawCvar95));
 
             return new MonteCarloResult
             {
@@ -149,15 +162,15 @@ namespace MarketPortfolioAnalytics.Services
                 NumSimulations = N,
                 InitialValue = initialValue,
 
-                Percentile5 = (decimal)FinancialMath.Percentile(finalVals, 0.05),
+                Percentile5 = (decimal)p5Threshold,
                 Percentile25 = (decimal)FinancialMath.Percentile(finalVals, 0.25),
                 Median = (decimal)FinancialMath.Percentile(finalVals, 0.50),
                 Percentile75 = (decimal)FinancialMath.Percentile(finalVals, 0.75),
                 Percentile95 = (decimal)FinancialMath.Percentile(finalVals, 0.95),
 
-                VaR95 = (decimal)Math.Max(0.0, var95),
-                VaR99 = (decimal)Math.Max(0.0, var99),
-                CVaR95 = (decimal)Math.Max(0.0, cvar95),
+                VaR95 = (decimal)safeVar95,
+                VaR99 = (decimal)safeVar99,
+                CVaR95 = (decimal)safeCvar95,
 
                 ProbabilityOfLossPct = Math.Round(
                     (double)finalVals.Count(v => v < initVal) / N * 100, 2),
