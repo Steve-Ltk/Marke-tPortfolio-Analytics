@@ -14,10 +14,13 @@ namespace MarketPortfolioAnalytics.Services
     ///
     ///   2. GET /api/v3/historical-price-full/{symbol}?from=...&to=...&apikey=...
     ///      → Prix historiques journaliers OHLCV.
-    ///      → Stratégie 3-URLs avec filtrage local de date pour compatibilité plan gratuit.
+    ///      → Stratégie multi-URLs avec filtrage local de date pour compatibilité plan gratuit.
     ///
     ///   3. GET /stable/company-notes?symbol=T&apikey=...
     ///      → Informations sur les obligations (CouponRate, MaturityDate).
+    ///
+    ///   4. GET /api/v3/quote/{PAIR}?apikey=...
+    ///      → Taux de change spot (ex : EURUSD, USDEUR) pour conversion de devises.
     /// </summary>
     public class FmpService
     {
@@ -81,34 +84,6 @@ namespace MarketPortfolioAnalytics.Services
 
         // ═══════════════════════════════════════════════════════════════════════
         // ENDPOINT 2 — Prix historiques journaliers
-        //
-        // STRATÉGIE 3-URLs pour compatibilité maximum avec le plan gratuit FMP :
-        //
-        //   URL 1 : v3 avec filtrage serveur (from/to) — optimal
-        //           /api/v3/historical-price-full/{symbol}?from=...&to=...&apikey=...
-        //
-        //   URL 2 : v3 SANS filtrage de date — fallback plan gratuit
-        //           /api/v3/historical-price-full/{symbol}?apikey=...
-        //           → Le plan gratuit peut ignorer/rejeter les paramètres from/to.
-        //             Dans ce cas on récupère tout et on filtre localement.
-        //
-        //   URL 3 : endpoint stable — dernier recours
-        //           /stable/historical-prices?symbol=...&from=...&to=...&apikey=...
-        //
-        // FORMATS DE RÉPONSE FMP GÉRÉS :
-        //
-        //   Format A — tableau direct (stable, plan premium) :
-        //   [{date, open, high, low, close, volume}, ...]
-        //
-        //   Format B — objet avec "historical" (v3, standard) :
-        //   {"symbol": "AAPL", "historical": [{...}]}
-        //
-        //   Format C — objet avec "historicalStockList" (v3, multi-symboles) :
-        //   {"historicalStockList": [{"symbol": "AAPL", "historical": [{...}]}]}
-        //
-        // FILTRAGE DE DATE :
-        //   Toujours appliqué LOCALEMENT après parsing pour garantir la cohérence
-        //   même si le serveur n'a pas filtré (URL 2).
         // ═══════════════════════════════════════════════════════════════════════
 
         public async Task<List<FmpHistoricalPrice>> GetHistoricalPricesAsync(
@@ -118,34 +93,17 @@ namespace MarketPortfolioAnalytics.Services
             string fromStr = from.ToString("yyyy-MM-dd");
             string toStr = to.ToString("yyyy-MM-dd");
 
-            // STRATÉGIE 4 URLs — essayées dans l'ordre, arrêt à la première qui retourne des données.
-            //
-            // URL 1 : endpoint stable/eod/light — CONFIRMÉ fonctionnel sur le plan gratuit.
-            //         Format : [{symbol, date, price, volume}]  ← champ "price" et non "close" !
-            //
-            // URL 2 : endpoint stable/historical-prices — ancien endpoint stable
-            //         Format : [{symbol, date, price, volume}]  (même format que URL 1)
-            //
-            // URL 3 : v3 avec filtrage serveur — endpoint standard FMP
-            //         Format : {"symbol":"AAPL","historical":[{date, open, high, low, close, ...}]}
-            //
-            // URL 4 : v3 sans date — le plan gratuit peut ignorer from/to ; on filtre localement
-            //         Format : identique à URL 3
             var urls = new[]
             {
-                // URL 1 — endpoint EOD light (plan gratuit confirmé, champ "price")
                 $"{_opt.BaseUrl}/stable/historical-price-eod/light" +
                     $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
 
-                // URL 2 — endpoint stable classique (même format que URL 1)
                 $"{_opt.BaseUrl}/stable/historical-prices" +
                     $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
 
-                // URL 3 — v3 avec dates (champ "close" dans un objet "historical")
                 $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}" +
                     $"?from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
 
-                // URL 4 — v3 sans dates (fallback si le plan gratuit ignore from/to)
                 $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}" +
                     $"?apikey={_opt.ApiKey}",
             };
@@ -157,7 +115,6 @@ namespace MarketPortfolioAnalytics.Services
 
                 var parsed = ParseHistoricalPrices(json);
 
-                // Filtrage local par plage de dates — indispensable pour l'URL 4 (sans dates)
                 var inRange = parsed
                     .Where(p => p.Date >= from.Date && p.Date <= to.Date)
                     .ToList();
@@ -169,25 +126,6 @@ namespace MarketPortfolioAnalytics.Services
             return new List<FmpHistoricalPrice>();
         }
 
-        /// <summary>
-        /// Parse un corps JSON FMP et retourne les prix historiques.
-        ///
-        /// FORMATS GÉRÉS :
-        ///
-        ///   Format A — tableau direct avec champ "price" (endpoint /stable/historical-price-eod/light) :
-        ///   [{"symbol":"AAPL", "date":"2023-12-29", "price":192.53, "volume":42672148}, ...]
-        ///
-        ///   Format B — tableau direct avec champ "close" (autres endpoints stable) :
-        ///   [{"date":"2024-01-15", "open":183.63, "high":184.26, "low":182.42, "close":183.31}, ...]
-        ///
-        ///   Format C — objet avec "historical" (v3 standard) :
-        ///   {"symbol":"AAPL", "historical":[{date, open, high, low, close, ...}]}
-        ///
-        ///   Format D — objet avec "historicalStockList" (v3 multi-symboles) :
-        ///   {"historicalStockList":[{"symbol":"AAPL","historical":[...]}]}
-        ///
-        /// Retourne une liste vide en cas d'erreur de parsing.
-        /// </summary>
         private List<FmpHistoricalPrice> ParseHistoricalPrices(string json)
         {
             try
@@ -197,7 +135,6 @@ namespace MarketPortfolioAnalytics.Services
 
                 if (doc.RootElement.ValueKind == JsonValueKind.Array)
                 {
-                    // Format A ou B — tableau direct
                     pricesArray = doc.RootElement;
                 }
                 else if (doc.RootElement.ValueKind == JsonValueKind.Object)
@@ -205,7 +142,6 @@ namespace MarketPortfolioAnalytics.Services
                     if (doc.RootElement.TryGetProperty("historical", out var hist)
                         && hist.ValueKind == JsonValueKind.Array)
                     {
-                        // Format C — {"symbol":"AAPL","historical":[...]}
                         pricesArray = hist;
                     }
                     else if (doc.RootElement.TryGetProperty("historicalStockList", out var stockList)
@@ -214,12 +150,10 @@ namespace MarketPortfolioAnalytics.Services
                              && stockList[0].TryGetProperty("historical", out var innerHist)
                              && innerHist.ValueKind == JsonValueKind.Array)
                     {
-                        // Format D — {"historicalStockList":[{"symbol":"AAPL","historical":[...]}]}
                         pricesArray = innerHist;
                     }
                     else
                     {
-                        // Réponse d'erreur FMP : {"Error Message":"Limit Reach."} ou similaire
                         return new List<FmpHistoricalPrice>();
                     }
                 }
@@ -232,14 +166,10 @@ namespace MarketPortfolioAnalytics.Services
 
                 foreach (var item in pricesArray.EnumerateArray())
                 {
-                    // "date" obligatoire
                     string? dateStr = ReadString(item, "date");
                     if (!DateTime.TryParse(dateStr, out var date))
                         continue;
 
-                    // Prix de clôture : essaie "price" EN PREMIER (format EOD light),
-                    // puis "close", "adjClose" et variantes (formats v3 et stable classique).
-                    // FMP peut retourner ces valeurs comme nombre ou comme chaîne.
                     decimal close = 0;
                     bool closeFound = false;
 
@@ -271,7 +201,6 @@ namespace MarketPortfolioAnalytics.Services
 
                     if (!closeFound || close <= 0) continue;
 
-                    // Champs OHLC optionnels (absents du format EOD light)
                     decimal? open = ReadDecimal(item, "open");
                     decimal? high = ReadDecimal(item, "high");
                     decimal? low = ReadDecimal(item, "low");
@@ -343,6 +272,86 @@ namespace MarketPortfolioAnalytics.Services
             {
                 return null;
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENDPOINT 4 — Taux de change spot (NOUVEAU)
+        //
+        // Convertit 1 unité de `fromCurrency` en `toCurrency`.
+        // Ex : GetExchangeRateAsync("USD", "EUR") → ~0.926
+        //
+        // Stratégie :
+        //   1. Essaie la paire directe (ex : USDEUR) sur v3/quote et stable/quote
+        //   2. Si non trouvée, essaie la paire inverse (ex : EURUSD) et retourne 1/rate
+        //   3. Fallback : retourne 1.0 (pas de conversion — valeurs restent en devise source)
+        //
+        // Note : FMP supporte mieux EURUSD que USDEUR sur le plan gratuit.
+        // La stratégie inverse garantit qu'on trouve toujours le taux.
+        // ═══════════════════════════════════════════════════════════════════════
+
+        public async Task<decimal> GetExchangeRateAsync(string fromCurrency, string toCurrency)
+        {
+            // Pas de conversion nécessaire
+            if (string.Equals(fromCurrency, toCurrency, StringComparison.OrdinalIgnoreCase))
+                return 1m;
+
+            string from = fromCurrency.Trim().ToUpper();
+            string to = toCurrency.Trim().ToUpper();
+
+            // ── Essai paire directe (ex : USDEUR) ─────────────────────────────
+            decimal rate = await FetchForexRateAsync($"{from}{to}");
+            if (rate > 0m) return rate;
+
+            // ── Essai paire inverse (ex : EURUSD → 1 / EURUSD) ────────────────
+            decimal inverseRate = await FetchForexRateAsync($"{to}{from}");
+            if (inverseRate > 0m) return 1m / inverseRate;
+
+            // ── Fallback : pas de conversion (taux 1:1) ────────────────────────
+            // Les valeurs restent dans leur devise source plutôt que de retourner 0.
+            return 1m;
+        }
+
+        /// <summary>
+        /// Interroge FMP pour obtenir le prix spot d'une paire forex (ex : EURUSD).
+        /// Retourne 0 si la paire est introuvable ou en cas d'erreur.
+        /// </summary>
+        private async Task<decimal> FetchForexRateAsync(string pair)
+        {
+            var urls = new[]
+            {
+                $"{_opt.BaseUrl}/api/v3/quote/{pair}?apikey={_opt.ApiKey}",
+                $"{_opt.BaseUrl}/stable/quote?symbol={pair}&apikey={_opt.ApiKey}",
+            };
+
+            foreach (var url in urls)
+            {
+                string? json = await GetJsonAsync(url);
+                if (json is null) continue;
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+
+                    if (doc.RootElement.ValueKind != JsonValueKind.Array
+                        || doc.RootElement.GetArrayLength() == 0)
+                        continue;
+
+                    var item = doc.RootElement[0];
+
+                    // Essaie les champs de prix dans l'ordre de préférence
+                    foreach (var key in new[] { "price", "previousClose", "ask", "bid" })
+                    {
+                        if (!item.TryGetProperty(key, out var el)) continue;
+                        if (el.ValueKind != JsonValueKind.Number) continue;
+
+                        decimal val = el.GetDecimal();
+                        if (val > 0m) return val;
+                    }
+                }
+                catch (JsonException) { }
+            }
+
+            return 0m;
         }
 
         // ═══════════════════════════════════════════════════════════════════════

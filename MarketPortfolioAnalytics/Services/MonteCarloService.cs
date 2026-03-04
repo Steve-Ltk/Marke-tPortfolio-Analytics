@@ -11,14 +11,19 @@ namespace MarketPortfolioAnalytics.Services
     /// Principe :
     ///   On estime μ (rendement moyen journalier) et σ (volatilité journalière)
     ///   directement sur la SÉRIE DE VALEUR AGRÉGÉE du portefeuille.
-    ///   Cette approche est correcte car elle capture automatiquement les
-    ///   corrélations entre actifs — contrairement à une simulation actif par actif.
+    ///   Cette approche capture automatiquement les corrélations entre actifs.
     ///
     /// Modèle GBM :
     ///   V(t+1) = V(t) × exp( (μ - σ²/2) + σ × Z )
     ///   où Z ~ N(0,1) est un choc aléatoire journalier
     ///
-    ///   (μ - σ²/2) est la dérive corrigée d'Itô — garantit que E[V(t)] = V(0) × e^(μt)
+    /// DEVISE :
+    ///   La série historique est construite en devise portefeuille (via FX rates).
+    ///   Tous les résultats (InitialValue, VaR, CVaR, percentiles) sont donc
+    ///   exprimés dans la devise du portefeuille (ex : EUR).
+    ///
+    /// GARANTIE CVaR >= VaR :
+    ///   Double filet de sécurité (double + decimal) garantit CVaR95 >= VaR95 >= 0.
     /// </summary>
     public class MonteCarloService
     {
@@ -36,11 +41,9 @@ namespace MarketPortfolioAnalytics.Services
         public async Task<MonteCarloResult?> SimulateAsync(
             int portfolioId, MonteCarloRequest req)
         {
-            // Période historique pour estimer μ et σ
             DateTime histTo = (req.HistoryTo ?? DateTime.UtcNow.Date).Date;
             DateTime histFrom = (req.HistoryFrom ?? histTo.AddYears(-2)).Date;
 
-            // Chargement du portefeuille
             var portfolio = await _context.Portfolio
                 .Include(p => p.ListePositions!)
                     .ThenInclude(pos => pos.Asset)
@@ -53,7 +56,6 @@ namespace MarketPortfolioAnalytics.Services
 
             if (positions.Count == 0) return null;
 
-            // ── Construction de la série historique du portefeuille ───────────
             var assetIds = positions.Select(p => p.AssetId).ToList();
             var allPrices = await _analytics.LoadPricesAsync(assetIds, histFrom, histTo);
 
@@ -63,27 +65,30 @@ namespace MarketPortfolioAnalytics.Services
                     g => g.Key,
                     g => g.OrderBy(ap => ap.Date).ToList());
 
-            var (_, portValues) = _analytics.BuildPortfolioSeries(positions, pricesByAsset);
+            // ── Taux de change vers la devise du portefeuille ─────────────────
+            var fxRates = await _analytics.GetFxRatesAsync(positions, portfolio.Currency);
+
+            // ── Série historique en devise portefeuille ───────────────────────
+            var (_, portValues) = _analytics.BuildPortfolioSeries(
+                positions, pricesByAsset, fxRates);
 
             if (portValues.Length < 20)
-                return null;   // pas assez d'historique pour estimer les paramètres
+                return null;
 
-            // ── Estimation des paramètres GBM sur la série agrégée ────────────
+            // ── Estimation des paramètres GBM ─────────────────────────────────
             double[] portReturns = FinancialMath.SimpleReturns(portValues);
             double muDaily = FinancialMath.Mean(portReturns);
             double sigmaDaily = FinancialMath.StdDev(portReturns);
-
-            // Dérive corrigée d'Itô : drift = μ - σ²/2
             double drift = muDaily - 0.5 * sigmaDaily * sigmaDaily;
 
-            double initVal = portValues[^1];   // valeur actuelle du portefeuille
+            double initVal = portValues[^1];   // valeur actuelle en devise portefeuille
             decimal initialValue = (decimal)initVal;
 
             if (initialValue <= 0) return null;
 
             int T = req.HorizonDays;
             int N = req.NumSimulations;
-            var rng = new Random(42);   // graine fixe → reproductible
+            var rng = new Random(42);
 
             // ── Simulation des N chemins sur T jours ──────────────────────────
             var allPaths = new double[N][];
@@ -133,7 +138,7 @@ namespace MarketPortfolioAnalytics.Services
             double p5Threshold = FinancialMath.Percentile(finalVals, 0.05);
             double p1Threshold = FinancialMath.Percentile(finalVals, 0.01);
 
-            // VaR = perte depuis la valeur initiale (positif = perte)
+            // VaR = perte absolue depuis la valeur initiale (positif = perte)
             double rawVar95 = initVal - p5Threshold;
             double rawVar99 = initVal - p1Threshold;
 
@@ -143,28 +148,28 @@ namespace MarketPortfolioAnalytics.Services
                 ? initVal - tail95.Average()
                 : rawVar95;
 
-            // ── GARANTIE NIVEAU DOUBLE ─────────────────────────────────────────
-            // safeVar95 >= 0 et safeCvar95 >= safeVar95 >= 0 par construction
+            // ── GARANTIE NIVEAU 1 — double precision ───────────────────────────
+            // Assure : safeCvar95 >= safeVar95 >= 0
             double safeVar95 = Math.Max(0.0, rawVar95);
             double safeVar99 = Math.Max(0.0, rawVar99);
             double safeCvar95 = Math.Max(safeVar95, Math.Max(0.0, rawCvar95));
 
-            // ── GARANTIE NIVEAU DECIMAL ────────────────────────────────────────
-            // Double précision flottante → conversion decimal → filet de sécurité final
-            // Assure que CVaR95 >= VaR95 même après conversion de type
+            // ── GARANTIE NIVEAU 2 — decimal precision ──────────────────────────
+            // La conversion double→decimal peut introduire un epsilon d'arrondi.
+            // Ce second filet garantit l'invariant CVaR95 >= VaR95 après conversion.
             decimal decVar95 = (decimal)safeVar95;
             decimal decVar99 = (decimal)safeVar99;
             decimal decCvar95 = (decimal)safeCvar95;
 
-            // Protection absolue post-conversion : CVaR95 ne peut jamais être < VaR95
-            if (decCvar95 < decVar95) decCvar95 = decVar95;
+            if (decCvar95 < decVar95)
+                decCvar95 = decVar95;   // protection absolue post-conversion
 
             return new MonteCarloResult
             {
                 PortfolioId = portfolioId,
                 HorizonDays = T,
                 NumSimulations = N,
-                InitialValue = initialValue,
+                InitialValue = initialValue,   // en devise portefeuille (ex : EUR)
 
                 Percentile5 = (decimal)p5Threshold,
                 Percentile25 = (decimal)FinancialMath.Percentile(finalVals, 0.25),
@@ -172,9 +177,11 @@ namespace MarketPortfolioAnalytics.Services
                 Percentile75 = (decimal)FinancialMath.Percentile(finalVals, 0.75),
                 Percentile95 = (decimal)FinancialMath.Percentile(finalVals, 0.95),
 
+                // camelCase → "vaR95"  / "vaR99"  / "cVaR95"
+                // Aucun [JsonPropertyName] sur ces propriétés → Postman reçoit les bonnes clés
                 VaR95 = decVar95,
                 VaR99 = decVar99,
-                CVaR95 = decCvar95,   // garantit CVaR95 >= VaR95 par les deux niveaux ci-dessus
+                CVaR95 = decCvar95,   // invariant CVaR95 >= VaR95 garanti par les deux niveaux
 
                 ProbabilityOfLossPct = Math.Round(
                     (double)finalVals.Count(v => v < initVal) / N * 100, 2),

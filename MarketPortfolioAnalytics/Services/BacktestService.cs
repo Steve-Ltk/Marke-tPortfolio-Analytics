@@ -8,15 +8,11 @@ namespace MarketPortfolioAnalytics.Services
     /// <summary>
     /// Backtesting historique d'un portefeuille.
     ///
-    /// Principe :
-    ///   On simule la performance du portefeuille sur une période passée
-    ///   en utilisant les quantités réelles des positions et les prix historiques.
-    ///
-    ///   Buy &amp; Hold : les quantités restent fixes du début à la fin.
-    ///   Rééquilibrage : à chaque période, on recalcule les quantités pour
-    ///   retrouver les poids initiaux (en valeur de marché).
-    ///
-    ///   Si un benchmark est fourni, on calcule Beta et Alpha.
+    /// DEVISE :
+    ///   Les taux de change spot sont récupérés une fois via FMP et appliqués
+    ///   à chaque évaluation journalière. La série de valeurs résultante est
+    ///   exprimée dans la devise du portefeuille (ex : EUR).
+    ///   Le rééquilibrage tient également compte de la conversion FX.
     /// </summary>
     public class BacktestService
     {
@@ -35,7 +31,6 @@ namespace MarketPortfolioAnalytics.Services
         {
             if (req.From >= req.To) return null;
 
-            // Chargement du portefeuille
             var portfolio = await _context.Portfolio
                 .Include(p => p.ListePositions!)
                     .ThenInclude(pos => pos.Asset)
@@ -55,7 +50,6 @@ namespace MarketPortfolioAnalytics.Services
                     g => g.Key,
                     g => g.OrderBy(ap => ap.Date).ToList());
 
-            // Dates de trading disponibles sur la période
             var tradingDates = allPrices
                 .Select(ap => ap.Date.Date)
                 .Distinct()
@@ -64,48 +58,52 @@ namespace MarketPortfolioAnalytics.Services
 
             if (tradingDates.Count < 5) return null;
 
-            // ── Simulation jour par jour ──────────────────────────────────────
-            // Quantités de travail (copiées pour ne pas modifier les positions réelles)
+            // ── Taux de change vers la devise du portefeuille ─────────────────
+            var fxRates = await _analytics.GetFxRatesAsync(positions, portfolio.Currency);
+
+            // Conversion en double pour la boucle de simulation
+            var fxDouble = fxRates.ToDictionary(
+                kv => kv.Key,
+                kv => (double)kv.Value);
+
+            // ── Quantités de travail ──────────────────────────────────────────
             var quantities = positions.ToDictionary(
                 p => p.AssetId,
                 p => (double)p.Quantity);
 
-            // Valeur du portefeuille au premier jour — sert de référence pour le rééquilibrage
-            // On calcule manuellement sans curseur car c'est un seul instant
+            // ── Valeur initiale en devise portefeuille ────────────────────────
             double initTotal = assetIds.Sum(id =>
             {
                 if (!pricesByAsset.TryGetValue(id, out var prices)) return 0.0;
                 var p = prices.FirstOrDefault(ap => ap.Date.Date <= tradingDates[0].Date);
                 return p is not null
                     ? (double)p.Close * quantities.GetValueOrDefault(id)
+                      * fxDouble.GetValueOrDefault(id, 1.0)
                     : 0.0;
             });
 
-            // Poids initiaux de chaque actif (en valeur de marché au premier jour)
+            // ── Poids initiaux (en valeur de marché convertie) ────────────────
             var initialWeights = assetIds.ToDictionary(
                 id => id,
                 id =>
                 {
-                    if (!pricesByAsset.TryGetValue(id, out var prices)) return 1.0 / assetIds.Count;
+                    if (!pricesByAsset.TryGetValue(id, out var prices))
+                        return 1.0 / assetIds.Count;
                     var p = prices.FirstOrDefault(ap => ap.Date.Date <= tradingDates[0].Date);
-                    if (p is null || initTotal <= 0) return 1.0 / assetIds.Count;
-                    return (double)p.Close * quantities.GetValueOrDefault(id) / initTotal;
+                    if (p is null || initTotal <= 0)
+                        return 1.0 / assetIds.Count;
+                    double fxRate = fxDouble.GetValueOrDefault(id, 1.0);
+                    return (double)p.Close * quantities.GetValueOrDefault(id) * fxRate / initTotal;
                 });
 
-            // ── Curseurs par actif — forward-fill O(1) ────────────────────────
-            // Même approche que BuildPortfolioSeries dans PortfolioAnalyticsService.
-            // Pour chaque actif, un curseur pointe sur le dernier prix connu.
-            // Il n'avance jamais en arrière → O(n) total au lieu de O(n²).
-            var cursors = assetIds.ToDictionary(
-                id => id,
-                _ => 0);
+            // ── Curseurs O(n) par actif ───────────────────────────────────────
+            var cursors = assetIds.ToDictionary(id => id, _ => 0);
 
             DateTime? lastRebalance = null;
             var portSeries = new List<(DateTime date, double value)>(tradingDates.Count);
 
             foreach (var date in tradingDates)
             {
-                // Avancer chaque curseur jusqu'à la date courante
                 foreach (var id in assetIds)
                 {
                     if (!pricesByAsset.TryGetValue(id, out var prices)) continue;
@@ -116,18 +114,20 @@ namespace MarketPortfolioAnalytics.Services
                     cursors[id] = c;
                 }
 
+                // Valeur totale en devise portefeuille
                 double totalValue = assetIds.Sum(id =>
                 {
                     if (!pricesByAsset.TryGetValue(id, out var prices)) return 0.0;
                     int c = cursors[id];
+                    double fxRate = fxDouble.GetValueOrDefault(id, 1.0);
                     return prices[c].Date.Date <= date.Date
-                        ? (double)prices[c].Close * quantities.GetValueOrDefault(id)
+                        ? (double)prices[c].Close * quantities.GetValueOrDefault(id) * fxRate
                         : 0.0;
                 });
 
                 portSeries.Add((date, totalValue));
 
-                // Rééquilibrage si la fréquence l'exige
+                // Rééquilibrage
                 if (req.Rebalancing != RebalancingFrequency.BuyAndHold
                     && ShouldRebalance(date, lastRebalance, req.Rebalancing)
                     && totalValue > 0)
@@ -136,14 +136,16 @@ namespace MarketPortfolioAnalytics.Services
                     {
                         if (!pricesByAsset.TryGetValue(id, out var prices)) continue;
                         int c = cursors[id];
-                        double price = prices[c].Date.Date <= date.Date
+                        double priceInAssetCurrency = prices[c].Date.Date <= date.Date
                             ? (double)prices[c].Close
                             : 0.0;
+                        double fxRate = fxDouble.GetValueOrDefault(id, 1.0);
+                        double priceInPortCurrency = priceInAssetCurrency * fxRate;
 
                         double targetWeight = initialWeights.GetValueOrDefault(id);
 
-                        if (price > 0)
-                            quantities[id] = totalValue * targetWeight / price;
+                        if (priceInPortCurrency > 0)
+                            quantities[id] = totalValue * targetWeight / priceInPortCurrency;
                     }
 
                     lastRebalance = date;
@@ -197,7 +199,7 @@ namespace MarketPortfolioAnalytics.Services
                 }
             }
 
-            // ── Construction du résultat ──────────────────────────────────────
+            // ── Résultat ──────────────────────────────────────────────────────
             return new BacktestResult
             {
                 PortfolioId = portfolioId,
@@ -265,15 +267,13 @@ namespace MarketPortfolioAnalytics.Services
             };
         }
 
-        // ── Helpers privés ────────────────────────────────────────────────────
+        // ── Helper privé ──────────────────────────────────────────────────────
 
-        /// <summary>Détermine si un rééquilibrage doit avoir lieu à une date donnée.</summary>
         private static bool ShouldRebalance(
             DateTime date,
             DateTime? lastRebalance,
             RebalancingFrequency freq)
         {
-            // Pas encore rééquilibré → on rééquilibre au premier jour
             if (lastRebalance is null)
                 return true;
 
