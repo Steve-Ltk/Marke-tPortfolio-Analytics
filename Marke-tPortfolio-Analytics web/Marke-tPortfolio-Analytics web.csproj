@@ -8,7 +8,29 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="NewFolder1\**" />
+    <Compile Remove="NewFolder\**" />
+    <Content Remove="NewFolder1\**" />
+    <Content Remove="NewFolder\**" />
+    <EmbeddedResource Remove="NewFolder1\**" />
+    <EmbeddedResource Remove="NewFolder\**" />
+    <None Remove="NewFolder1\**" />
+    <None Remove="NewFolder\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Controllers\BaseController - Copy %282%29.cs" />
+    <Compile Remove="Controllers\BaseController - Copy %283%29.cs" />
+    <Compile Remove="Controllers\BaseController - Copy %284%29.cs" />
+    <Compile Remove="Controllers\BaseController - Copy.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MarketPortfolioAnalytics\MarketPortfolioAnalytics.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="NewFolder2\" />
   </ItemGroup>
 
 </Project>
