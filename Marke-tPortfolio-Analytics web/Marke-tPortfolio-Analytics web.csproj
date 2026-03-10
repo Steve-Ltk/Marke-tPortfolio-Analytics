@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -9,13 +9,13 @@
 
   <ItemGroup>
     <Compile Remove="NewFolder1\**" />
-    <Compile Remove="NewFolder\**" />
+    <Compile Remove="NewFolder2\**" />
     <Content Remove="NewFolder1\**" />
-    <Content Remove="NewFolder\**" />
+    <Content Remove="NewFolder2\**" />
     <EmbeddedResource Remove="NewFolder1\**" />
-    <EmbeddedResource Remove="NewFolder\**" />
+    <EmbeddedResource Remove="NewFolder2\**" />
     <None Remove="NewFolder1\**" />
-    <None Remove="NewFolder\**" />
+    <None Remove="NewFolder2\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,11 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MarketPortfolioAnalytics\MarketPortfolioAnalytics.csproj" />
+    <Content Remove="Views\Shared\_ValidationScriptsPartial.cshtml" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="NewFolder2\" />
+    <ProjectReference Include="..\MarketPortfolioAnalytics\MarketPortfolioAnalytics.csproj" />
   </ItemGroup>
 
 </Project>

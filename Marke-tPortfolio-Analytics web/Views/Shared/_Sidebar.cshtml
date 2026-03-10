@@ -1,0 +1,114 @@
+﻿@{
+    // Détecte le controller actif pour surligner le bon item
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+
+    string IsActive(params string[] controllers)
+        => controllers.Contains(currentController, StringComparer.OrdinalIgnoreCase)
+           ? "sb-item active"
+           : "sb-item";
+}
+
+<aside class="mpa-sidebar" id="mpa-sidebar">
+
+    <!-- Logo MPA -->
+    <div class="sb-logo">
+        <div class="sb-logo-icon"></div>
+        <span class="sb-logo-name">MPA</span>
+    </div>
+
+    <!-- Navigation principale -->
+    <nav class="sb-nav">
+
+        <a asp-controller="Dashboard" asp-action="Index"
+           class="@IsActive("Dashboard")">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+            </svg>
+            Dashboard
+        </a>
+
+        <a asp-controller="Portfolios" asp-action="Index"
+           class="@IsActive("Portfolios", "Positions")">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                <polyline points="16 7 22 7 22 13" />
+            </svg>
+            Portefeuilles
+        </a>
+
+        <a asp-controller="Assets" asp-action="Index"
+           class="@IsActive("Assets")">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            Marché
+        </a>
+
+        <a asp-controller="Analytics" asp-action="Index"
+           class="@IsActive("Analytics")">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Analytics
+        </a>
+
+        <a asp-controller="Goal" asp-action="Wizard"
+           class="@IsActive("Goal")">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+            </svg>
+            Mon Objectif
+        </a>
+
+        <div class="sb-divider"></div>
+
+        <a asp-controller="Profile" asp-action="Index"
+           class="@IsActive("Profile")">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+            </svg>
+            Profil
+        </a>
+
+        <a asp-controller="Auth" asp-action="Logout"
+           class="sb-item sb-logout">
+            <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            Déconnexion
+        </a>
+
+    </nav>
+
+    <!-- Chip utilisateur en bas -->
+    <div class="sb-footer">
+        <div class="sb-user-chip">
+            <div class="sb-avatar">
+                @(ViewData["CurrentUserName"]?.ToString()?.Substring(0, 1).ToUpper() ?? "?")
+            </div>
+            <div class="sb-user-info">
+                <div class="sb-user-name">@ViewData["CurrentUserName"]</div>
+                <div class="sb-user-email">@ViewData["CurrentUserEmail"]</div>
+            </div>
+        </div>
+    </div>
+
+</aside>
+
+<!-- Overlay mobile -->
+<div class="sb-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
+
+

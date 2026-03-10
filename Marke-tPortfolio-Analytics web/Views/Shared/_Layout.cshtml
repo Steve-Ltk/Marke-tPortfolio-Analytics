@@ -1,49 +1,54 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Marke_tPortfolio_Analytics_web</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/Marke_tPortfolio_Analytics_web.styles.css" asp-append-version="true" />
-</head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Marke_tPortfolio_Analytics_web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " — MPA" : "MarketPortfolioAnalytics")</title>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - Marke_tPortfolio_Analytics_web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-        </div>
-    </footer>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Google Fonts : Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+    <!-- MPA CSS principal -->
+    <link rel="stylesheet" href="~/css/mpa.css" asp-append-version="true" />
+
+    @RenderSection("Styles", required: false)
+</head>
+<body class="mpa-body">
+
+    <!-- ═══ LAYOUT : SIDEBAR + MAIN ═══════════════════════════════════════ -->
+    <div class="mpa-layout">
+
+        <!-- Sidebar -->
+        @await Html.PartialAsync("_Sidebar")
+
+        <!-- Zone principale -->
+        <div class="mpa-main">
+
+            <!-- Topbar -->
+            @await Html.PartialAsync("_Topbar")
+
+            <!-- Messages flash (succès / erreur / warning) -->
+            @await Html.PartialAsync("_AlertMessages")
+
+            <!-- Contenu de la page -->
+            <main class="mpa-content">
+                @RenderBody()
+            </main>
+
+        </div><!-- /mpa-main -->
+    </div><!-- /mpa-layout -->
+    <!-- ═══ SCRIPTS ════════════════════════════════════════════════════════ -->
+    <!-- jQuery (nécessaire pour les appels AJAX analytics) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- JS MPA -->
     <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+
+    @RenderSection("Scripts", required: false)
+
 </body>
 </html>
+

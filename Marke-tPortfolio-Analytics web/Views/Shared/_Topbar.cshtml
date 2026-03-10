@@ -1,0 +1,58 @@
+﻿@{
+    var pageTitle = ViewData["Title"]?.ToString() ?? "Dashboard";
+    var breadcrumb = ViewData["Breadcrumb"]?.ToString();
+}
+
+<header class="mpa-topbar">
+    <div class="topbar-left">
+        <!-- Bouton hamburger mobile -->
+        <button class="topbar-hamburger" onclick="openSidebar()" aria-label="Menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+        </button>
+
+        <div>
+            @if (!string.IsNullOrEmpty(breadcrumb))
+            {
+                <div class="topbar-breadcrumb">@Html.Raw(breadcrumb)</div>
+            }
+            <h1 class="topbar-title">@pageTitle</h1>
+        </div>
+    </div>
+
+    <div class="topbar-right">
+        <!-- Barre de recherche -->
+        <div class="topbar-search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input type="text" placeholder="Rechercher un ticker..." id="globalSearch"
+                   autocomplete="off" />
+        </div>
+
+        <!-- Indicateur temps réel -->
+        <div class="topbar-realtime" id="realtime-indicator" title="Données temps réel FMP">
+            <span class="rt-dot"></span>
+            <span class="rt-label">En direct</span>
+        </div>
+
+        <!-- Cloche notifications (placeholder) -->
+        <button class="topbar-notif" aria-label="Notifications">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+        </button>
+
+        <!-- Avatar utilisateur -->
+        <a asp-controller="Profile" asp-action="Index" class="topbar-avatar"
+           title="Mon profil">
+            @(ViewData["CurrentUserName"]?.ToString()?.Substring(0, 1).ToUpper() ?? "?")
+        </a>
+    </div>
+</header>
+
