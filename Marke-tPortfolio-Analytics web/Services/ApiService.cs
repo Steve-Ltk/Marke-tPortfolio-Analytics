@@ -196,11 +196,28 @@ namespace Marke_tPortfolio_Analytics_web.Services
 
         public async Task<bool> ChangePasswordAsync(int id, string currentPassword, string newPassword)
         {
-            return await PatchAsync($"api/AppUsers/{id}/password", new
+            try
             {
-                currentPassword = currentPassword,
-                newPassword = newPassword
-            });
+                var client = CreateClient();
+                var json = System.Text.Json.JsonSerializer.Serialize(newPassword);
+                var content = new System.Net.Http.StringContent(
+                    json, System.Text.Encoding.UTF8, "application/json");
+
+                var request = new System.Net.Http.HttpRequestMessage(
+                    System.Net.Http.HttpMethod.Patch,
+                    $"api/AppUsers/{id}/password")
+                {
+                    Content = content
+                };
+
+                var response = await client.SendAsync(request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur PATCH password userId={Id}", id);
+                return false;
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════

@@ -1,9 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using MarketPortfolioAnalytics.Data;
+using MarketPortfolioAnalytics.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MarketPortfolioAnalytics.Data;
-using MarketPortfolioAnalytics.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace MarketPortfolioAnalytics.Controllers
 {
@@ -246,7 +247,41 @@ namespace MarketPortfolioAnalytics.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        // Authentification par email + mot de passe.
+        // POST /api/AppUsers/login
+        // Body JSON : { "email": "...", "password": "..." }
+        //
+        // Utilise PasswordHasher&lt;AppUser&gt; d'ASP.NET Identity,
+        // identique au hasher utilisé dans Create() et UpdatePassword().
+        //
+        // Retourne 200 + AppUser si valide (PasswordHash est [JsonIgnore]).
+        // Retourne 401 si email inconnu, inactif, ou mot de passe incorrect.
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest req)
+        {
+            if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
+                return BadRequest("Email et mot de passe obligatoires.");
+
+            var user = await _context.AppUser
+                .FirstOrDefaultAsync(u =>
+                    u.Email == req.Email.Trim().ToLower() &&
+                    u.IsActive);
+
+            if (user == null)
+                return Unauthorized("Email ou mot de passe incorrect.");
+
+            var hasher = new PasswordHasher<AppUser>();
+            var result = hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
+
+            if (result == PasswordVerificationResult.Failed)
+                return Unauthorized("Email ou mot de passe incorrect.");
+
+            // PasswordHash est [JsonIgnore] dans AppUser → jamais retourné au client
+            return Ok(user);
+        }
     }
+
 
     // ═══════════════════════════════════════════════════════════════════════════
     // DTO — évite la validation prématurée du modèle AppUser complet
@@ -258,6 +293,9 @@ namespace MarketPortfolioAnalytics.Controllers
     //   validation du modèle passe et le contrôleur gère la logique métier.
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Corps de la requête de mise à jour d'un utilisateur (PUT).</summary>
+    // <summary>Corps de la requête de mise à jour d'un utilisateur (PUT).</summary>
     public record UpdateUserRequest(string? FullName, string? Email);
+
+    // <summary>Corps de la requête POST /api/AppUsers/login.</summary>
+    public record LoginRequest(string Email, string Password);
 }

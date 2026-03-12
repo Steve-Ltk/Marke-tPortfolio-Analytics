@@ -128,7 +128,7 @@ using (var scope = app.Services.GetRequiredService<IServiceScopeFactory>().Creat
     var context = scope.ServiceProvider
         .GetRequiredService<MarketPortfolioAnalyticsContext>();
 
-    context.Database.EnsureDeleted();
+    //context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
 
 }

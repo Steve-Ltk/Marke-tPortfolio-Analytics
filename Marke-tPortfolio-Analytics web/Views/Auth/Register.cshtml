@@ -1,5 +1,209 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.RegisterViewModel
 @{
+    Layout = "_LayoutAuth";
+    ViewData["Title"] = "Créer un compte";
+}
+
+<div class="auth-layout">
+
+    <!-- ══ GAUCHE — BRANDING ════════════════════════════════════════════ -->
+    <div class="auth-left">
+
+        <div class="auth-logo">
+            <div class="auth-logo-icon"></div>
+            <span class="auth-logo-name">MPA</span>
+        </div>
+
+        <div>
+            <h1 class="auth-headline">Votre portefeuille.<br>Vos décisions.<br>Votre avenir.</h1>
+            <p class="auth-tagline">
+                Créez votre compte gratuitement et commencez à analyser
+                vos investissements comme un professionnel.
+            </p>
+        </div>
+
+        <div class="auth-features">
+            <div class="auth-feat">
+                <div class="auth-feat-icon" style="background:rgba(59,130,246,.15)">🔒</div>
+                <div class="auth-feat-text">Vos données restent privées — hébergement local</div>
+            </div>
+            <div class="auth-feat">
+                <div class="auth-feat-icon" style="background:rgba(16,185,129,.15)">📊</div>
+                <div class="auth-feat-text">Accès immédiat à tous les modules analytics</div>
+            </div>
+            <div class="auth-feat">
+                <div class="auth-feat-icon" style="background:rgba(245,158,11,.15)">🚀</div>
+                <div class="auth-feat-text">Wizard Mon Objectif — prêt en 2 minutes</div>
+            </div>
+        </div>
+
+        <div class="auth-stats">
+            <div class="auth-stat">
+                <div class="auth-stat-num">Gratuit</div>
+                <div class="auth-stat-label">Accès complet</div>
+            </div>
+            <div class="auth-stat">
+                <div class="auth-stat-num">∞</div>
+                <div class="auth-stat-label">Portefeuilles</div>
+            </div>
+            <div class="auth-stat">
+                <div class="auth-stat-num">FMP</div>
+                <div class="auth-stat-label">Données temps réel</div>
+            </div>
+            <div class="auth-stat">
+                <div class="auth-stat-num">ASP.NET</div>
+                <div class="auth-stat-label">Sécurité enterprise</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ══ DROITE — FORMULAIRE ══════════════════════════════════════════ -->
+    <div class="auth-right">
+        <div class="auth-form-wrap">
+
+            <h2 class="auth-form-title">Créer un compte</h2>
+            <p class="auth-form-sub">Remplissez le formulaire pour commencer.</p>
+
+            @if (!ViewData.ModelState.IsValid)
+            {
+                @foreach (var error in ViewData.ModelState[""]?.Errors
+                            ?? new Microsoft.AspNetCore.Mvc.ModelBinding.ModelErrorCollection())
+                {
+                    <div class="mpa-alert mpa-alert-error" style="margin-bottom:16px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span>@error.ErrorMessage</span>
+                    </div>
+                }
+            }
+
+            <form asp-controller="Auth" asp-action="Register" method="post">
+                @Html.AntiForgeryToken()
+
+                <div class="field">
+                    <label asp-for="FullName">Nom complet</label>
+                    <input asp-for="FullName" type="text"
+                           class="form-control @(ViewData.ModelState["FullName"]?.Errors.Count > 0 ? "is-invalid" : "")"
+                           placeholder="Jean Dupont"
+                           autocomplete="name" autofocus />
+                    <span asp-validation-for="FullName" class="field-error"></span>
+                </div>
+
+                <div class="field">
+                    <label asp-for="Email">Adresse email</label>
+                    <input asp-for="Email" type="email"
+                           class="form-control @(ViewData.ModelState["Email"]?.Errors.Count > 0 ? "is-invalid" : "")"
+                           placeholder="vous@exemple.com"
+                           autocomplete="email" />
+                    <span asp-validation-for="Email" class="field-error"></span>
+                </div>
+
+                <div class="field">
+                    <label asp-for="Password">Mot de passe</label>
+                    <div class="field-hint">Minimum 8 caractères</div>
+                    <div style="position:relative">
+                        <input asp-for="Password" type="password" id="pwd"
+                               class="form-control @(ViewData.ModelState["Password"]?.Errors.Count > 0 ? "is-invalid" : "")"
+                               placeholder="••••••••"
+                               autocomplete="new-password"
+                               oninput="checkStrength(this.value)" />
+                        <button type="button" onclick="togglePwd('pwd','eye1')"
+                                style="position:absolute;right:12px;top:38px;
+                                       background:none;border:none;cursor:pointer;
+                                       color:var(--text-300);padding:0">
+                            <svg id="eye1" width="16" height="16" viewBox="0 0 24 24"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- Barre force mot de passe -->
+                    <div style="display:flex;gap:4px;margin-top:6px">
+                        <div class="s-bar" id="s1"></div>
+                        <div class="s-bar" id="s2"></div>
+                        <div class="s-bar" id="s3"></div>
+                        <div class="s-bar" id="s4"></div>
+                    </div>
+                    <span asp-validation-for="Password" class="field-error"></span>
+                </div>
+
+                <div class="field">
+                    <label asp-for="ConfirmPassword">Confirmer le mot de passe</label>
+                    <div style="position:relative">
+                        <input asp-for="ConfirmPassword" type="password" id="cpwd"
+                               class="form-control @(ViewData.ModelState["ConfirmPassword"]?.Errors.Count > 0 ? "is-invalid" : "")"
+                               placeholder="••••••••"
+                               autocomplete="new-password" />
+                        <button type="button" onclick="togglePwd('cpwd','eye2')"
+                                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                                       background:none;border:none;cursor:pointer;
+                                       color:var(--text-300);padding:0">
+                            <svg id="eye2" width="16" height="16" viewBox="0 0 24 24"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </button>
+                    </div>
+                    <span asp-validation-for="ConfirmPassword" class="field-error"></span>
+                </div>
+
+                <button type="submit" class="btn btn-black btn-full btn-lg"
+                        style="margin-top:8px">
+                    Créer mon compte
+                </button>
+            </form>
+
+            <div class="auth-form-link">
+                Déjà un compte ?
+                <a asp-controller="Auth" asp-action="Login">Se connecter</a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .s-bar {
+            flex: 1;
+            height: 3px;
+            border-radius: 999px;
+            background: var(--border);
+            transition: background .2s;
+        }
+    </style>
+}
+
+@section Scripts {
+    <script>
+        function togglePwd(inputId, iconId) {
+            const el = document.getElementById(inputId);
+            const ic = document.getElementById(iconId);
+            const hide = el.type === 'password';
+            el.type = hide ? 'text' : 'password';
+            ic.innerHTML = hide
+                ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+                : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+        }
+
+        function checkStrength(val) {
+            const colors = ['#ef4444','#f59e0b','#10b981','#2563eb'];
+            let s = 0;
+            if (val.length >= 8)           s++;
+            if (/[A-Z]/.test(val))         s++;
+            if (/[0-9]/.test(val))         s++;
+            if (/[^A-Za-z0-9]/.test(val))  s++;
+            for (let i = 1; i <= 4; i++) {
+                const el = document.getElementById('s' + i);
+                el.style.background = i <= s ? colors[s - 1] : 'var(--border)';
+            }
+        }
+    </script>
 }
