@@ -1,5 +1,48 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.PortfolioCreateViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = "Nouveau portefeuille";
+    ViewData["Section"] = "Portefeuilles";
 }
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Nouveau portefeuille</div>
+        <div class="page-sub">Définissez le nom et la devise de référence.</div>
+    </div>
+    <a href="/Portfolios" class="btn btn-ghost">← Annuler</a>
+</div>
+
+<div style="max-width:520px">
+    <div class="card">
+        <form asp-action="Create" asp-controller="Portfolios" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="field">
+                <label asp-for="Name">Nom du portefeuille</label>
+                <input asp-for="Name" class="form-control @(ViewData.ModelState["Name"]?.Errors.Count > 0 ? "is-invalid" : "")"
+                       placeholder="Ex : Tech Growth, Retraite 2040…" autocomplete="off" />
+                <span asp-validation-for="Name" class="field-error"></span>
+            </div>
+
+            <div class="field">
+                <label asp-for="Description">Description <span style="color:var(--t4);font-weight:400">(optionnel)</span></label>
+                <textarea asp-for="Description" class="form-control" placeholder="Stratégie, objectif…" rows="3"></textarea>
+                <span asp-validation-for="Description" class="field-error"></span>
+            </div>
+
+            <div class="field">
+                <label asp-for="Currency">Devise de référence</label>
+                <select asp-for="Currency" class="form-control">
+                    <option value="EUR">EUR — Euro</option>
+                    <option value="USD">USD — Dollar américain</option>
+                </select>
+                <span asp-validation-for="Currency" class="field-error"></span>
+            </div>
+
+            <button type="submit" class="btn btn-green btn-full btn-lg">
+                Créer le portefeuille →
+            </button>
+        </form>
+    </div>
+</div>

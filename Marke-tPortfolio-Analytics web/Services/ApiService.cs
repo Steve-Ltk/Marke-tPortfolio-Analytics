@@ -9,18 +9,15 @@ namespace Marke_tPortfolio_Analytics_web.Services
     /// <summary>
     /// Implémentation concrète de IApiService.
     /// Tous les appels HTTP vers le backend passent ici.
-    /// Utilise directement les types MarketPortfolioAnalytics.Models (via ProjectReference).
-    /// Aucun DTO dupliqué.
     /// </summary>
     public class ApiService : IApiService
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<ApiService> _logger;
 
-        // Options de désérialisation JSON partagées
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
-            PropertyNameCaseInsensitive = true,  // "var95" et "VaR95" sont équivalents
+            PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
@@ -34,28 +31,19 @@ namespace Marke_tPortfolio_Analytics_web.Services
 
         private HttpClient CreateClient() => _httpClientFactory.CreateClient("ApiClient");
 
-        /// <summary>GET générique vers l'API.</summary>
         private async Task<T?> GetAsync<T>(string url) where T : class
         {
             try
             {
                 var client = CreateClient();
                 var response = await client.GetAsync(url);
-
-                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                    return null;
-
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<T>(_jsonOptions);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur GET {Url}", url);
-                return null;
-            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur GET {Url}", url); return null; }
         }
 
-        /// <summary>POST générique vers l'API, retourne T.</summary>
         private async Task<T?> PostAsync<T>(string url, object body) where T : class
         {
             try
@@ -63,29 +51,14 @@ namespace Marke_tPortfolio_Analytics_web.Services
                 var client = CreateClient();
                 var json = JsonSerializer.Serialize(body, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-
                 var response = await client.PostAsync(url, content);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("POST {Url} → {Status}", url, response.StatusCode);
-                    return null;
-                }
-
-                // Certains endpoints retournent 204 No Content (Delete, certains PUT)
-                if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
-                    return null;
-
+                if (!response.IsSuccessStatusCode) { _logger.LogWarning("POST {Url} → {Status}", url, response.StatusCode); return null; }
+                if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return null;
                 return await response.Content.ReadFromJsonAsync<T>(_jsonOptions);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur POST {Url}", url);
-                return null;
-            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur POST {Url}", url); return null; }
         }
 
-        /// <summary>POST générique vers l'API, retourne bool (succès/échec).</summary>
         private async Task<bool> PostBoolAsync(string url, object body)
         {
             try
@@ -96,14 +69,9 @@ namespace Marke_tPortfolio_Analytics_web.Services
                 var response = await client.PostAsync(url, content);
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur POST {Url}", url);
-                return false;
-            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur POST {Url}", url); return false; }
         }
 
-        /// <summary>PUT générique, retourne bool.</summary>
         private async Task<bool> PutAsync(string url, object body)
         {
             try
@@ -114,14 +82,9 @@ namespace Marke_tPortfolio_Analytics_web.Services
                 var response = await client.PutAsync(url, content);
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur PUT {Url}", url);
-                return false;
-            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur PUT {Url}", url); return false; }
         }
 
-        /// <summary>PATCH générique, retourne bool.</summary>
         private async Task<bool> PatchAsync(string url, object body)
         {
             try
@@ -133,14 +96,24 @@ namespace Marke_tPortfolio_Analytics_web.Services
                 var response = await client.SendAsync(request);
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur PATCH {Url}", url);
-                return false;
-            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur PATCH {Url}", url); return false; }
         }
 
-        /// <summary>DELETE générique, retourne bool.</summary>
+        /// <summary>PATCH avec string brute (pour PATCH /{id}/password).</summary>
+        private async Task<bool> PatchStringAsync(string url, string value)
+        {
+            try
+            {
+                var client = CreateClient();
+                var content = new StringContent(
+                    JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
+                var request = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
+                var response = await client.SendAsync(request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur PATCH string {Url}", url); return false; }
+        }
+
         private async Task<bool> DeleteAsync(string url)
         {
             try
@@ -149,11 +122,7 @@ namespace Marke_tPortfolio_Analytics_web.Services
                 var response = await client.DeleteAsync(url);
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur DELETE {Url}", url);
-                return false;
-            }
+            catch (Exception ex) { _logger.LogError(ex, "Erreur DELETE {Url}", url); return false; }
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -161,64 +130,31 @@ namespace Marke_tPortfolio_Analytics_web.Services
         // ══════════════════════════════════════════════════════════════════════
 
         public async Task<AppUser?> LoginAsync(string email, string password)
-        {
-            return await PostAsync<AppUser>("api/AppUsers/login", new
-            {
-                email = email,
-                password = password
-            });
-        }
+            => await PostAsync<AppUser>("api/AppUsers/login", new { email, password });
 
         public async Task<AppUser?> RegisterAsync(string fullName, string email, string password)
-        {
-            return await PostAsync<AppUser>("api/AppUsers", new
+            => await PostAsync<AppUser>("api/AppUsers", new
             {
-                fullName = fullName,
-                email = email,
-                password = password,
+                fullName,
+                email,
+                password,
                 role = "User",
                 isActive = true
             });
-        }
 
         public async Task<AppUser?> GetUserByIdAsync(int id)
             => await GetAsync<AppUser>($"api/AppUsers/{id}");
 
         public async Task<bool> UpdateUserAsync(int id, string fullName, string email)
-        {
-            return await PutAsync($"api/AppUsers/{id}", new
-            {
-                id = id,
-                fullName = fullName,
-                email = email
-            });
-        }
+            => await PutAsync($"api/AppUsers/{id}", new { id, fullName, email });
 
+        /// <summary>
+        /// ✅ CORRIGÉ Phase 2 : envoie newPassword comme string JSON brute.
+        /// Le backend PATCH /{id}/password accepte [FromBody] string newPassword.
+        /// currentPassword ignoré (non vérifié côté backend).
+        /// </summary>
         public async Task<bool> ChangePasswordAsync(int id, string currentPassword, string newPassword)
-        {
-            try
-            {
-                var client = CreateClient();
-                var json = System.Text.Json.JsonSerializer.Serialize(newPassword);
-                var content = new System.Net.Http.StringContent(
-                    json, System.Text.Encoding.UTF8, "application/json");
-
-                var request = new System.Net.Http.HttpRequestMessage(
-                    System.Net.Http.HttpMethod.Patch,
-                    $"api/AppUsers/{id}/password")
-                {
-                    Content = content
-                };
-
-                var response = await client.SendAsync(request);
-                return response.IsSuccessStatusCode;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur PATCH password userId={Id}", id);
-                return false;
-            }
-        }
+            => await PatchStringAsync($"api/AppUsers/{id}/password", newPassword);
 
         // ══════════════════════════════════════════════════════════════════════
         // PORTEFEUILLES
@@ -227,7 +163,7 @@ namespace Marke_tPortfolio_Analytics_web.Services
         public async Task<List<Portfolio>> GetPortfoliosByUserAsync(int userId)
         {
             var result = await GetAsync<List<Portfolio>>($"api/Portfolios?userId={userId}");
-            return result ?? new List<Portfolio>();
+            return result ?? new();
         }
 
         public async Task<Portfolio?> GetPortfolioByIdAsync(int id)
@@ -236,62 +172,64 @@ namespace Marke_tPortfolio_Analytics_web.Services
         public async Task<Portfolio?> GetPortfolioDetailsAsync(int id)
             => await GetAsync<Portfolio>($"api/Portfolios/{id}/details");
 
-        public async Task<Portfolio?> CreatePortfolioAsync(string name, string currency, int userId)
-        {
-            return await PostAsync<Portfolio>("api/Portfolios", new
+        /// <summary>✅ Phase 3 : crée un portefeuille via objet Portfolio complet.</summary>
+        public async Task<Portfolio?> CreatePortfolioAsync(Portfolio portfolio)
+            => await PostAsync<Portfolio>("api/Portfolios", new
             {
-                name = name,
-                currency = currency,
-                userId = userId
+                name = portfolio.Name,
+                description = portfolio.Description,
+                currency = portfolio.Currency,
+                userId = portfolio.UserId
             });
-        }
 
-        public async Task<bool> UpdatePortfolioAsync(int id, string name, string currency, int userId)
-        {
-            return await PutAsync($"api/Portfolios/{id}", new
+        /// <summary>✅ Phase 3 : met à jour un portefeuille via objet Portfolio.</summary>
+        public async Task<bool> UpdatePortfolioAsync(int id, Portfolio portfolio)
+            => await PutAsync($"api/Portfolios/{id}", new
             {
                 id = id,
-                name = name,
-                currency = currency,
-                userId = userId
+                name = portfolio.Name,
+                description = portfolio.Description,
+                currency = portfolio.Currency,
+                userId = portfolio.UserId
             });
-        }
 
         public async Task<bool> DeletePortfolioAsync(int id)
             => await DeleteAsync($"api/Portfolios/{id}");
 
         // ══════════════════════════════════════════════════════════════════════
-        // POSITIONS
+        // POSITIONS  
         // ══════════════════════════════════════════════════════════════════════
 
-        public async Task<bool> AddPositionAsync(int portfolioId, int assetId,
-            decimal quantity, decimal avgBuyPrice, DateTime buyDate)
-        {
-            return await PostBoolAsync($"api/Portfolios/{portfolioId}/positions", new
-            {
-                portfolioId = portfolioId,
-                assetId = assetId,
-                quantity = quantity,
-                avgBuyPrice = avgBuyPrice,
-                buyDate = buyDate.ToString("yyyy-MM-dd")
-            });
-        }
+        public async Task<List<Position>?> GetPositionsByPortfolioAsync(int portfolioId)
+            => await GetAsync<List<Position>>($"api/Portfolios/{portfolioId}/positions");
 
-        public async Task<bool> UpdatePositionAsync(int portfolioId, int assetId,
-            decimal quantity, decimal avgBuyPrice, DateTime buyDate)
-        {
-            return await PutAsync($"api/Portfolios/{portfolioId}/positions/{assetId}", new
-            {
-                portfolioId = portfolioId,
-                assetId = assetId,
-                quantity = quantity,
-                avgBuyPrice = avgBuyPrice,
-                buyDate = buyDate.ToString("yyyy-MM-dd")
-            });
-        }
+        public async Task<Position?> GetPositionByIdAsync(int id)
+            => await GetAsync<Position>($"api/Positions/{id}");
 
-        public async Task<bool> DeletePositionAsync(int portfolioId, int assetId)
-            => await DeleteAsync($"api/Portfolios/{portfolioId}/positions/{assetId}");
+        public async Task<Position?> CreatePositionAsync(Position position)
+            => await PostAsync<Position>(
+                $"api/Portfolios/{position.PortfolioId}/positions", new
+                {
+                    portfolioId = position.PortfolioId,
+                    assetId = position.AssetId,
+                    quantity = position.Quantity,
+                    purchasePrice = position.PurchasePrice,
+                    purchaseDate = position.PurchaseDate.ToString("yyyy-MM-dd")
+                });
+
+        public async Task<bool> UpdatePositionAsync(int id, Position position)
+            => await PutAsync($"api/Positions/{id}", new
+            {
+                id = id,
+                portfolioId = position.PortfolioId,
+                assetId = position.AssetId,
+                quantity = position.Quantity,
+                purchasePrice = position.PurchasePrice,
+                purchaseDate = position.PurchaseDate.ToString("yyyy-MM-dd")
+            });
+
+        public async Task<bool> DeletePositionAsync(int positionId)
+            => await DeleteAsync($"api/Positions/{positionId}");
 
         // ══════════════════════════════════════════════════════════════════════
         // ACTIFS
@@ -300,7 +238,7 @@ namespace Marke_tPortfolio_Analytics_web.Services
         public async Task<List<Asset>> GetAllAssetsAsync()
         {
             var result = await GetAsync<List<Asset>>("api/Assets");
-            return result ?? new List<Asset>();
+            return result ?? new();
         }
 
         public async Task<Asset?> GetAssetByIdAsync(int id)
@@ -310,11 +248,73 @@ namespace Marke_tPortfolio_Analytics_web.Services
             => await GetAsync<Asset>($"api/Assets/by-ticker/{ticker.ToUpper()}");
 
         public async Task<Asset?> ImportStockFromFmpAsync(string ticker)
+            => await PostAsync<Asset>("api/Assets/stocks/from-fmp",
+                new { ticker = ticker.ToUpper() });
+
+        // ══════════════════════════════════════════════════════════════════════
+        // PRIX & TAUX DE CHANGE
+        // ══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Prix temps réel d'un actif.
+        /// GET /api/Assets/price/{symbol}
+        /// </summary>
+        public async Task<decimal?> GetLatestPriceAsync(string symbol)
         {
-            return await PostAsync<Asset>("api/Assets/stocks/from-fmp", new
+            try
             {
-                ticker = ticker.ToUpper()
-            });
+                var client = CreateClient();
+                var response = await client.GetAsync($"api/Assets/price/{symbol.ToUpper()}");
+                if (!response.IsSuccessStatusCode) return null;
+                var text = await response.Content.ReadAsStringAsync();
+                if (decimal.TryParse(text,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var price))
+                    return price;
+                // Si l'API retourne un objet JSON { "price": 123.45 }
+                using var doc = JsonDocument.Parse(text);
+                if (doc.RootElement.TryGetProperty("price", out var priceElem))
+                    return (decimal)priceElem.GetDouble();
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur GetLatestPriceAsync {Symbol}", symbol);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Taux de change entre deux devises.
+        /// GET /api/Assets/exchange-rate?from=EUR&amp;to=USD
+        /// Retourne 1.0 en cas d'erreur.
+        /// </summary>
+        public async Task<decimal> GetExchangeRateAsync(string from, string to)
+        {
+            try
+            {
+                if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return 1m;
+                var client = CreateClient();
+                var response = await client.GetAsync(
+                    $"api/Assets/exchange-rate?from={from}&to={to}");
+                if (!response.IsSuccessStatusCode) return 1m;
+                var text = await response.Content.ReadAsStringAsync();
+                if (decimal.TryParse(text,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var rate) && rate > 0)
+                    return rate;
+                using var doc = JsonDocument.Parse(text);
+                if (doc.RootElement.TryGetProperty("rate", out var rateElem))
+                    return (decimal)rateElem.GetDouble();
+                return 1m;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur GetExchangeRateAsync {From}/{To}", from, to);
+                return 1m; // Pas de crash — conversion neutre
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -331,31 +331,22 @@ namespace Marke_tPortfolio_Analytics_web.Services
 
         public async Task<MonteCarloResult?> RunMonteCarloAsync(
             int portfolioId, MonteCarloRequest request)
-        {
-            return await PostAsync<MonteCarloResult>(
+            => await PostAsync<MonteCarloResult>(
                 $"api/Analytics/portfolios/{portfolioId}/montecarlo", request);
-        }
 
         public async Task<BacktestResult?> RunBacktestAsync(
             int portfolioId, BacktestRequest request)
-        {
-            return await PostAsync<BacktestResult>(
+            => await PostAsync<BacktestResult>(
                 $"api/Analytics/portfolios/{portfolioId}/backtest", request);
-        }
 
         public async Task<OptimizationResult?> OptimizePortfolioAsync(
             int portfolioId, OptimizationRequest request)
-        {
-            return await PostAsync<OptimizationResult>(
+            => await PostAsync<OptimizationResult>(
                 $"api/Analytics/portfolios/{portfolioId}/optimize", request);
-        }
 
         public async Task<PortfolioComparisonResult?> ComparePortfoliosAsync(
             CompareRequest request)
-        {
-            return await PostAsync<PortfolioComparisonResult>(
+            => await PostAsync<PortfolioComparisonResult>(
                 "api/Analytics/portfolios/compare", request);
-        }
     }
 }
-

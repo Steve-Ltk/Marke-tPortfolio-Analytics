@@ -1,5 +1,94 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.PortfolioIndexViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = "Mes Portefeuilles";
+    ViewData["Section"] = "Portefeuilles";
+}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Mes Portefeuilles</div>
+        <div class="page-sub">
+            @Model.Portfolios.Count portefeuille(s) · Valeur totale :
+            <strong style="color:var(--green)">€@Model.ValeurTotaleEur.ToString("N2")</strong>
+        </div>
+    </div>
+    <a href="/Portfolios/Create" class="btn btn-green">+ Nouveau portefeuille</a>
+</div>
+
+@if (!Model.HasPortfolios)
+{
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:360px;text-align:center;gap:20px">
+        <div style="font-size:48px">📁</div>
+        <div>
+            <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px">Aucun portefeuille</div>
+            <div style="color:var(--t4);font-size:13px">Créez votre premier portefeuille pour commencer.</div>
+        </div>
+        <a href="/Portfolios/Create" class="btn btn-green btn-lg">Créer un portefeuille →</a>
+    </div>
+}
+else
+{
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+        @foreach (var card in Model.Portfolios)
+        {
+            <div class="card" style="cursor:pointer;transition:all .2s"
+                 onmouseover="this.style.borderColor='rgba(0,208,132,.3)'"
+                 onmouseout="this.style.borderColor='rgba(255,255,255,.07)'">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">@card.Portfolio.Name</div>
+                        <div class="card-sub">@card.NbPositions position(s) · @card.Portfolio.Currency</div>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center">
+                        <span class="badge @(card.RendementPct >= 0 ? "badge-green" : "badge-red")">
+                            @card.RendementSigne @Math.Abs(card.RendementPct).ToString("F1")%
+                        </span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(card.Portfolio.Description))
+                {
+                    <p style="font-size:12px;color:var(--t4);margin-bottom:14px">@card.Portfolio.Description</p>
+                }
+
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+                    <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Valeur</div>
+                        <div style="font-family:Sora,sans-serif;font-weight:800;font-size:16px;color:var(--green)">
+                            €@card.ValeurEur.ToString("N0")
+                        </div>
+                    </div>
+                    <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Positions</div>
+                        <div style="font-family:Sora,sans-serif;font-weight:800;font-size:16px">@card.NbPositions</div>
+                    </div>
+                    <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Créé le</div>
+                        <div style="font-family:Sora,sans-serif;font-weight:700;font-size:13px">
+                            @card.Portfolio.CreatedAt.ToString("dd/MM/yy")
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px">
+                    <a href="/Portfolios/Details/@card.Portfolio.Id" class="btn btn-green" style="flex:1;height:36px;font-size:12px">
+                        Voir →
+                    </a>
+                    <a href="/Positions/Create?portfolioId=@card.Portfolio.Id" class="btn btn-ghost" style="height:36px;font-size:12px">
+                        + Position
+                    </a>
+                    <a href="/Portfolios/Edit/@card.Portfolio.Id" class="btn btn-ghost" style="height:36px;font-size:12px;padding:0 10px">
+                        ✏️
+                    </a>
+                    <form asp-action="Delete" asp-controller="Portfolios" method="post" style="margin:0"
+                          onsubmit="return confirm('Supprimer « @card.Portfolio.Name » ? Cette action est irréversible.')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@card.Portfolio.Id" />
+                        <button type="submit" class="btn btn-danger" style="height:36px;font-size:12px;padding:0 10px">🗑</button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
 }

@@ -1,7 +1,6 @@
 ﻿using MarketPortfolioAnalytics.Data;
 using MarketPortfolioAnalytics.Models;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;

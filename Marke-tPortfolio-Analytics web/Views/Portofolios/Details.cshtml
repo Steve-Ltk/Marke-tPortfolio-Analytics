@@ -1,5 +1,137 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.PortfolioDetailsViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = Model.Portfolio.Name;
+    ViewData["Section"] = "Portefeuilles";
+}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">@Model.Portfolio.Name</div>
+        <div class="page-sub">
+            @Model.Portfolio.Currency · @Model.Positions.Count position(s) ·
+            Valeur : <strong style="color:var(--green)">€@Model.ValeurTotaleEur.ToString("N2")</strong>
+        </div>
+    </div>
+    <div class="header-actions">
+        <a href="/Portfolios" class="btn btn-ghost">← Retour</a>
+        <a href="/Positions/Create?portfolioId=@Model.Portfolio.Id" class="btn btn-ghost">+ Position</a>
+        <a href="/Analytics?portfolioId=@Model.Portfolio.Id" class="btn btn-green">Analyser →</a>
+    </div>
+</div>
+
+@if (!Model.HasPositions)
+{
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;gap:20px">
+        <div style="font-size:40px">📈</div>
+        <div>
+            <div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:700;margin-bottom:8px">Aucune position</div>
+            <div style="color:var(--t4);font-size:13px">Ajoutez un actif pour commencer à suivre ce portefeuille.</div>
+        </div>
+        <a href="/Positions/Create?portfolioId=@Model.Portfolio.Id" class="btn btn-green btn-lg">
+            + Ajouter une position →
+        </a>
+    </div>
+}
+else
+{
+    <!-- KPIs -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+        <div class="kpi" style="--accent:var(--green)">
+            <div class="kpi-label">Valeur totale</div>
+            <div class="kpi-val green">€@Model.ValeurTotaleEur.ToString("N2")</div>
+            <div class="kpi-sub">Taux EUR/USD : @Model.TauxEurUsd.ToString("F4")</div>
+        </div>
+        <div class="kpi" style="--accent:var(--blue)">
+            <div class="kpi-label">Positions</div>
+            <div class="kpi-val">@Model.Positions.Count</div>
+            <div class="kpi-sub">Actifs en portefeuille</div>
+        </div>
+        <div class="kpi" style="--accent:var(--amber)">
+            <div class="kpi-label">P&amp;L global</div>
+            @{
+                var pnlTotal = Model.Positions.Sum(p => p.PnlEur);
+                var signe = pnlTotal >= 0 ? "+" : "";
+            }
+            <div class="kpi-val @(pnlTotal >= 0 ? "green" : "red")">
+                @signe€@pnlTotal.ToString("N2")
+            </div>
+            <div class="kpi-sub">Gain / perte non réalisé</div>
+        </div>
+    </div>
+
+    <!-- Table des positions -->
+    <div class="card">
+        <div class="card-header">
+            <div><div class="card-title">Positions</div><div class="card-sub">Triées par valeur décroissante</div></div>
+            <a href="/Positions/Create?portfolioId=@Model.Portfolio.Id" class="btn btn-green" style="height:32px;font-size:12px">
+                + Ajouter
+            </a>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Actif</th>
+                        <th>Type</th>
+                        <th>Quantité</th>
+                        <th>Prix achat</th>
+                        <th>Prix actuel</th>
+                        <th>Valeur EUR</th>
+                        <th>P&amp;L</th>
+                        <th>Poids</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Positions.OrderByDescending(x => x.ValeurEur))
+                    {
+                        <tr>
+                            <td>
+                                <div class="td-ticker">@p.Ticker</div>
+                                <div class="td-name">@p.NomActif</div>
+                            </td>
+                            <td>
+                                <span class="badge @(p.TypeActif == "Bond" ? "badge-purple" : "badge-blue")">
+                                    @p.TypeActif
+                                </span>
+                            </td>
+                            <td>@p.Position.Quantity.ToString("G")</td>
+                            <td>@p.Devise @p.Position.PurchasePrice.ToString("N2")</td>
+                            <td>@p.Devise @p.PrixActuel.ToString("N2")</td>
+                            <td style="font-weight:600">€@p.ValeurEur.ToString("N2")</td>
+                            <td>
+                                <div class="@(p.PnlPct >= 0 ? "td-up" : "td-dn")">
+                                    @p.PnlSigne@p.PnlPct.ToString("F2")%
+                                </div>
+                                <div style="font-size:11px;color:var(--t4)">
+                                    @p.PnlSigne€@Math.Abs(p.PnlEur).ToString("N2")
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:6px">
+                                    <div class="metric-bar-wrap" style="width:50px">
+                                        <div class="metric-bar" style="width:@p.Poids.ToString("F0")%;background:var(--green)"></div>
+                                    </div>
+                                    <span style="font-size:11px;color:var(--t4)">@p.Poids.ToString("F1")%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display:flex;gap:6px">
+                                    <a href="/Positions/Edit/@p.Position.Id" class="btn btn-ghost btn-sm">✏️</a>
+                                    <form asp-action="Delete" asp-controller="Positions" method="post" style="margin:0"
+                                          onsubmit="return confirm('Supprimer la position @p.Ticker ?')">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@p.Position.Id" />
+                                        <input type="hidden" name="portfolioId" value="@Model.Portfolio.Id" />
+                                        <button type="submit" class="btn btn-danger btn-sm">🗑</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
