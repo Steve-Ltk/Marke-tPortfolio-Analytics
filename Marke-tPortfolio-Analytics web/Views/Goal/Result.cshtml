@@ -1,5 +1,195 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.GoalResultViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = "Résultat — Mon Objectif";
+    ViewData["Section"] = "Mon Objectif";
+    var t = Model.Template;
+    var insight = Marke_tPortfolio_Analytics_web.Helpers.InsightHelper.ProbGain(
+        (double)Model.ProbabiliteGain);
+
+    // Sérialiser ENTIEREMENT côté serveur pour ne PAS avoir de lambda dans le JS
+    // Les lambdas .Select(v => ...) dans @Html.Raw() causent TS1109 dans VS
+    var medList = new System.Collections.Generic.List<double>();
+    var p5List = new System.Collections.Generic.List<double>();
+    var p95List = new System.Collections.Generic.List<double>();
+    foreach (var v in Model.CourbeMediane) medList.Add((double)v);
+    foreach (var v in Model.CourbeP5) p5List.Add((double)v);
+    foreach (var v in Model.CourbeP95) p95List.Add((double)v);
+
+    var ser = new System.Text.Json.JsonSerializerOptions();
+    string jLbl = System.Text.Json.JsonSerializer.Serialize(Model.Labels, ser);
+    string jMed = System.Text.Json.JsonSerializer.Serialize(medList, ser);
+    string jP5 = System.Text.Json.JsonSerializer.Serialize(p5List, ser);
+    string jP95 = System.Text.Json.JsonSerializer.Serialize(p95List, ser);
+
+    decimal mult = Model.CapitalInitial > 0
+        ? Math.Round(Model.MedianeFinale / Model.CapitalInitial, 1) : 0;
+}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Résultat de votre simulation</div>
+        <div class="page-sub">
+            @t.Nom · @Model.HorizonAns ans ·
+            Capital initial €@Model.CapitalInitial.ToString("N0")
+        </div>
+    </div>
+    <a href="/Goal/Wizard?step=3" class="btn btn-ghost">← Modifier</a>
+</div>
+
+<div class="insight-box @(insight.Niveau == "Danger" ? "danger" : insight.Niveau == "Insuffisant" ? "warning" : "")"
+     style="margin-bottom:20px;max-width:900px">
+    <strong style="color:@insight.Couleur">@insight.Niveau</strong> —
+    Probabilité d'atteindre votre objectif sur @Model.HorizonAns ans :
+    <strong style="font-size:16px">@Model.ProbabiliteGain%</strong>.
+    @insight.Action
+</div>
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;max-width:900px">
+
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Projection Monte Carlo — @Model.HorizonAns ans</div>
+                <div class="card-sub">
+                    @t.Nom · ~@t.CagrEstime%/an · Volatilité ~@t.VolatiliteEstimee%
+                </div>
+            </div>
+        </div>
+        <canvas id="result-fan-chart" height="220"></canvas>
+
+        @* Légende — UNIQUEMENT des div, jamais de div imbriqué dans span *@
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;
+                    color:var(--t4);justify-content:center">
+            <div style="display:flex;align-items:center;gap:5px">
+                <div style="width:18px;height:2px;background:var(--green)"></div>
+                <span>Médiane</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px">
+                <div style="width:18px;height:2px;border-top:2px dashed rgba(0,208,132,.4)"></div>
+                <span>P95</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px">
+                <div style="width:18px;height:2px;border-top:2px dashed rgba(244,63,94,.4)"></div>
+                <span>P5</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card">
+            <div class="card-title" style="margin-bottom:14px">
+                Résultats après @Model.HorizonAns ans
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="background:rgba(0,208,132,.06);border:1px solid rgba(0,208,132,.2);
+                            border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">
+                        Probabilité de gain
+                    </div>
+                    <div style="font-family:Sora,sans-serif;font-weight:800;font-size:26px;
+                                color:@insight.Couleur">
+                        @Model.ProbabiliteGain%
+                    </div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">
+                        Médiane (scénario central)
+                    </div>
+                    <div style="font-family:Sora,sans-serif;font-weight:800;font-size:20px;
+                                color:var(--green)">
+                        €@Model.MedianeFinale.ToString("N0")
+                    </div>
+                    <div style="font-size:11px;color:var(--t4)">
+                        ×@mult le capital initial
+                    </div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:10px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:2px">Optimiste (P95)</div>
+                    <div style="font-family:Sora,sans-serif;font-weight:700;font-size:16px;
+                                color:var(--green)">
+                        €@Model.P95Finale.ToString("N0")
+                    </div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:10px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:2px">Pessimiste (P5)</div>
+                    <div style="font-family:Sora,sans-serif;font-weight:700;font-size:16px;
+                                color:var(--t3)">
+                        €@Model.P5Finale.ToString("N0")
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form asp-action="CreateFromGoal" asp-controller="Goal" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="scoreRisque" value="@Model.ScoreRisque" />
+            <button type="submit" class="btn btn-green btn-full btn-lg">
+                Créer ce portefeuille →
+            </button>
+        </form>
+        <a href="/Goal/Wizard?step=1" class="btn btn-ghost btn-full" style="text-align:center">
+            Recommencer
+        </a>
+    </div>
+</div>
+
+<div style="margin-top:24px;max-width:900px">
+    <div class="card">
+        <div class="card-title" style="margin-bottom:14px">
+            4 recommandations pour améliorer votre projection
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="background:var(--dark-3);border:1px solid var(--border);
+                        border-radius:var(--radius-lg);padding:16px">
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">📅 Allongez l'horizon</div>
+                <div style="font-size:12px;color:var(--t4);line-height:1.5">
+                    Chaque année supplémentaire réduit l'effet de la volatilité.
+                </div>
+            </div>
+            <div style="background:var(--dark-3);border:1px solid var(--border);
+                        border-radius:var(--radius-lg);padding:16px">
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">💰 Augmentez le capital</div>
+                <div style="font-size:12px;color:var(--t4);line-height:1.5">
+                    Plus de capital initial amplifie les intérêts composés.
+                </div>
+            </div>
+            <div style="background:var(--dark-3);border:1px solid var(--border);
+                        border-radius:var(--radius-lg);padding:16px">
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">🎯 Ajustez le profil risque</div>
+                <div style="font-size:12px;color:var(--t4);line-height:1.5">
+                    Un score légèrement plus élevé améliore le rendement médian.
+                </div>
+            </div>
+            <div style="background:var(--dark-3);border:1px solid var(--border);
+                        border-radius:var(--radius-lg);padding:16px">
+                <div style="font-weight:700;font-size:13px;margin-bottom:6px">🔄 Rebalancez régulièrement</div>
+                <div style="font-size:12px;color:var(--t4);line-height:1.5">
+                    Un rebalancement trimestriel améliore le Sharpe Ratio.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/charts.js"></script>
+    <script>
+        // Données JSON précalculées cote serveur dans le bloc @{
+    }
+    en haut
+    var fanLabels = @Html.Raw(jLbl);
+    var fanMed    = @Html.Raw(jMed);
+    var fanP5     = @Html.Raw(jP5);
+    var fanP95    = @Html.Raw(jP95);
+
+    document.addEventListener('DOMContentLoaded', function () {
+        charts.initFanChart('result-fan-chart', {
+            labels: fanLabels,
+            fanMed: fanMed,
+            fanP5:  fanP5,
+            fanP95: fanP95
+        });
+    });
+</script>
 }

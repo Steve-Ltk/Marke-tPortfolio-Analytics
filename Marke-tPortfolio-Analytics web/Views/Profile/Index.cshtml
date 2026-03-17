@@ -1,5 +1,141 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.ProfileViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = "Mon Profil";
+    ViewData["Section"] = "Profil";
+}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Mon Profil</div>
+        <div class="page-sub">Membre depuis @Model.MembreDepuis</div>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px">
+
+    <!-- Bloc stats -->
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+            <div style="width:64px;height:64px;
+                        background:linear-gradient(135deg,var(--green),#3b82f6);
+                        border-radius:50%;display:flex;align-items:center;justify-content:center;
+                        font-family:Sora,sans-serif;font-weight:800;font-size:24px;
+                        color:#fff;flex-shrink:0">
+                @Model.FullName.Substring(0, 1).ToUpper()
+            </div>
+            <div>
+                <div style="font-family:Sora,sans-serif;font-weight:700;font-size:18px">@Model.FullName</div>
+                <div style="font-size:13px;color:var(--t4)">@Model.Email</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Portefeuilles</div>
+                <div style="font-family:Sora,sans-serif;font-weight:800;font-size:20px">@Model.NbPortfolios</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Positions</div>
+                <div style="font-family:Sora,sans-serif;font-weight:800;font-size:20px">@Model.NbPositions</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Valeur EUR</div>
+                <div style="font-family:Sora,sans-serif;font-weight:800;font-size:16px;color:var(--green)">
+                    €@Model.ValeurTotale.ToString("N0")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modifier les informations -->
+    <div class="card">
+        <div class="card-title" style="margin-bottom:16px">Informations personnelles</div>
+        <form asp-action="Update" asp-controller="Profile" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="UserId" />
+
+            <div class="field">
+                <label asp-for="FullName">Nom complet</label>
+                <input asp-for="FullName"
+                       class="form-control @(ViewData.ModelState["FullName"]?.Errors.Count > 0 ? "is-invalid" : "")" />
+                <span asp-validation-for="FullName" class="field-error"></span>
+            </div>
+            <div class="field">
+                <label asp-for="Email">Adresse e-mail</label>
+                <input asp-for="Email" type="email"
+                       class="form-control @(ViewData.ModelState["Email"]?.Errors.Count > 0 ? "is-invalid" : "")" />
+                <span asp-validation-for="Email" class="field-error"></span>
+            </div>
+            <button type="submit" class="btn btn-green btn-full">
+                Enregistrer les modifications
+            </button>
+        </form>
+    </div>
+
+    <!-- Sécurité — changement de mot de passe -->
+    <div class="card" style="grid-column:1/-1">
+        <div class="card-title" style="margin-bottom:16px">🔒 Sécurité</div>
+        <form asp-action="ChangePassword" asp-controller="Profile" method="post"
+              style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:end">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="UserId" value="@Model.UserId" />
+
+            <div class="field" style="margin-bottom:0">
+                <label>Mot de passe actuel</label>
+                <input name="CurrentPassword" type="password" class="form-control"
+                       placeholder="Mot de passe actuel" />
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label>Nouveau mot de passe</label>
+                <input name="NewPassword" type="password" class="form-control" id="newPwd"
+                       placeholder="Minimum 8 caractères"
+                       oninput="checkStrength(this.value)" />
+                <div class="strength-bars" style="margin-top:6px;display:flex;gap:3px">
+                    @for (int i = 1; i <= 4; i++)
+                    {
+                        <div id="sb@(i)" style="flex:1;height:4px;background:rgba(255,255,255,.07);
+                                                     border-radius:2px;transition:background .2s"></div>
+                    }
+                </div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label>Confirmer</label>
+                <input name="ConfirmPassword" type="password" class="form-control"
+                       placeholder="Répétez le mot de passe" />
+            </div>
+            <button type="submit" class="btn btn-green" style="height:44px">
+                Changer →
+            </button>
+        </form>
+        @if (ViewData["PwdError"] != null)
+        {
+            <div class="insight-box danger" style="margin-top:12px">@ViewData["PwdError"]</div>
+        }
+    </div>
+
+    <!-- Actions de session -->
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+            <div style="font-weight:600;margin-bottom:4px">Session active</div>
+            <div style="font-size:13px;color:var(--t4)">
+                Déconnectez-vous si vous utilisez un appareil partagé.
+            </div>
+        </div>
+        <a href="/Auth/Logout" class="btn btn-danger">Déconnexion</a>
+    </div>
+
+</div>
+
+@section Scripts {
+    <script>
+        function checkStrength(val) {
+            var checks = [val.length >= 8, /[A-Z]/.test(val), /[0-9]/.test(val), /[^A-Za-z0-9]/.test(val)];
+            var score  = checks.filter(Boolean).length;
+            var colors = { 1:'#f43f5e', 2:'#f59e0b', 3:'#00d084', 4:'#00d084' };
+            [1,2,3,4].forEach(function(i) {
+                var bar = document.getElementById('sb'+i);
+                if (bar) bar.style.background = i <= score ? (colors[score] || '#00d084') : 'rgba(255,255,255,.07)';
+            });
+        }
+    </script>
 }

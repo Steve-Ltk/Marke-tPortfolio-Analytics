@@ -3,200 +3,37 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " — " : "")Catalis</title>
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " — Catalis" : "Catalis")</title>
 
+    <!-- Fonts Catalis -->
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet" />
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+    <!-- CSS Catalis -->
     <link rel="stylesheet" href="~/css/mpa.css" asp-append-version="true" />
+
+    @RenderSection("Styles", required: false)
 </head>
 <body class="mpa-body">
 
-    <!-- ══ OVERLAY MOBILE ══ -->
-    <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
+    <div class="mpa-layout">
+        @await Html.PartialAsync("_Sidebar")
 
-    <!-- ══════════════════════ SIDEBAR ══════════════════════ -->
-    <aside class="mpa-sidebar" id="sidebar">
+        <div class="mpa-main">
+            @await Html.PartialAsync("_Topbar")
+            @await Html.PartialAsync("_AlertMessages")
 
-        <!-- Logo -->
-        <div class="sb-logo">
-            <div class="sb-logo-icon"></div>
-            <span class="sb-logo-name">Catalis</span>
+            <main class="mpa-content">
+                @RenderBody()
+            </main>
         </div>
-
-        <!-- Navigation -->
-        <nav class="sb-nav">
-            <a class="sb-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Dashboard" ? "active" : "")"
-               href="/Dashboard">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="7" height="7" />
-                    <rect x="14" y="3" width="7" height="7" />
-                    <rect x="14" y="14" width="7" height="7" />
-                    <rect x="3" y="14" width="7" height="7" />
-                </svg>
-                Dashboard
-            </a>
-
-            <a class="sb-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Portfolios" ? "active" : "")"
-               href="/Portfolios">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                </svg>
-                Portefeuilles
-            </a>
-
-            <a class="sb-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Assets" ? "active" : "")"
-               href="/Assets">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="1" x2="12" y2="23" />
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-                Marché
-            </a>
-
-            <a class="sb-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Analytics" ? "active" : "")"
-               href="/Analytics">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-                Analytics
-            </a>
-
-            <div class="sb-divider"></div>
-
-            <a class="sb-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Goal" ? "active" : "")"
-               href="/Goal">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <circle cx="12" cy="12" r="6" />
-                    <circle cx="12" cy="12" r="2" />
-                </svg>
-                Mon Objectif
-            </a>
-
-            <a class="sb-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Profile" ? "active" : "")"
-               href="/Profile">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                </svg>
-                Profil
-            </a>
-        </nav>
-
-        <!-- Pied — Utilisateur + Déconnexion -->
-        <div class="sb-footer">
-            <div class="sb-user-chip">
-                <div class="sb-avatar">
-                    @(Context.Session.GetString("UserName")?.Substring(0, 1).ToUpper() ?? "?")
-                </div>
-                <div style="min-width:0">
-                    <div class="sb-user-name">@Context.Session.GetString("UserName")</div>
-                    <div class="sb-user-email">@Context.Session.GetString("UserEmail")</div>
-                </div>
-            </div>
-            <a class="sb-item sb-logout" href="/Auth/Logout" style="margin-top:6px">
-                <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-                Déconnexion
-            </a>
-        </div>
-    </aside>
-
-    <!-- ══════════════════════ MAIN ══════════════════════ -->
-    <div class="mpa-main">
-
-        <!-- TOPBAR -->
-        <header class="mpa-topbar">
-            <div class="topbar-left">
-                <button class="topbar-hamburger" onclick="openSidebar()" aria-label="Menu">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
-                    </svg>
-                </button>
-                <div>
-                    <div class="topbar-breadcrumb">Catalis · @ViewData["Section"]</div>
-                    <div class="topbar-title">@ViewData["Title"]</div>
-                </div>
-            </div>
-            <div class="topbar-right">
-                <div class="topbar-search">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.35-4.35" />
-                    </svg>
-                    <input placeholder="Rechercher ticker, portefeuille…" />
-                </div>
-                <div class="topbar-realtime">
-                    <div class="rt-dot"></div>
-                    Live
-                </div>
-                <a href="/Profile" class="topbar-avatar">
-                    @(Context.Session.GetString("UserName")?.Substring(0, 1).ToUpper() ?? "?")
-                </a>
-            </div>
-        </header>
-
-        <!-- TICKER TAPE -->
-        <div class="mpa-ticker">
-            <div class="ticker-track" id="tickerTrack">
-                <span class="tick-item"><span class="tick-sym">AAPL</span><span class="tick-up">▲ 1.24%</span></span>
-                <span class="tick-item"><span class="tick-sym">MSFT</span><span class="tick-up">▲ 0.87%</span></span>
-                <span class="tick-item"><span class="tick-sym">NVDA</span><span class="tick-up">▲ 3.41%</span></span>
-                <span class="tick-item"><span class="tick-sym">OR.PA</span><span class="tick-dn">▼ 0.32%</span></span>
-                <span class="tick-item"><span class="tick-sym">TTE.PA</span><span class="tick-up">▲ 0.55%</span></span>
-                <span class="tick-item"><span class="tick-sym">AMZN</span><span class="tick-up">▲ 1.09%</span></span>
-                <span class="tick-item"><span class="tick-sym">S&amp;P 500</span><span class="tick-up">▲ 0.43%</span></span>
-                <span class="tick-item"><span class="tick-sym">CAC 40</span><span class="tick-dn">▼ 0.18%</span></span>
-                <span class="tick-item"><span class="tick-sym">GOOGL</span><span class="tick-up">▲ 0.76%</span></span>
-                <span class="tick-item"><span class="tick-sym">META</span><span class="tick-up">▲ 1.33%</span></span>
-                <span class="tick-item"><span class="tick-sym">AAPL</span><span class="tick-up">▲ 1.24%</span></span>
-                <span class="tick-item"><span class="tick-sym">MSFT</span><span class="tick-up">▲ 0.87%</span></span>
-                <span class="tick-item"><span class="tick-sym">NVDA</span><span class="tick-up">▲ 3.41%</span></span>
-                <span class="tick-item"><span class="tick-sym">OR.PA</span><span class="tick-dn">▼ 0.32%</span></span>
-                <span class="tick-item"><span class="tick-sym">TTE.PA</span><span class="tick-up">▲ 0.55%</span></span>
-                <span class="tick-item"><span class="tick-sym">AMZN</span><span class="tick-up">▲ 1.09%</span></span>
-                <span class="tick-item"><span class="tick-sym">S&amp;P 500</span><span class="tick-up">▲ 0.43%</span></span>
-                <span class="tick-item"><span class="tick-sym">CAC 40</span><span class="tick-dn">▼ 0.18%</span></span>
-                <span class="tick-item"><span class="tick-sym">GOOGL</span><span class="tick-up">▲ 0.76%</span></span>
-                <span class="tick-item"><span class="tick-sym">META</span><span class="tick-up">▲ 1.33%</span></span>
-            </div>
-        </div>
-
-        <!-- CONTENU PAGE -->
-        <main class="mpa-content">
-
-            @* Alertes globales (TempData) *@
-            @if (TempData["SuccessMessage"] != null)
-            {
-                <div class="mpa-alert mpa-alert-success" style="margin-bottom:16px">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12" /></svg>
-                    @TempData["SuccessMessage"]
-                    <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">✕</button>
-                </div>
-            }
-            @if (TempData["ErrorMessage"] != null)
-            {
-                <div class="mpa-alert mpa-alert-error" style="margin-bottom:16px">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                    @TempData["ErrorMessage"]
-                    <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">✕</button>
-                </div>
-            }
-
-            @RenderBody()
-        </main>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+    @RenderSection("Scripts", required: false)
 
-    <script>
-        function openSidebar()  { document.getElementById('sidebar').classList.add('open'); document.getElementById('sbOverlay').classList.add('open'); }
-        function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sbOverlay').classList.remove('open'); }
-    </script>
 </body>
 </html>

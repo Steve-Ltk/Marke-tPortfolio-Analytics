@@ -1,160 +1,149 @@
-﻿using Marke_tPortfolio_Analytics_web.ViewModels;
+﻿using Marke_tPortfolio_Analytics_web.Helpers;
 using Marke_tPortfolio_Analytics_web.Services;
-using MarketPortfolioAnalytics.Models;
+using Marke_tPortfolio_Analytics_web.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Marke_tPortfolio_Analytics_web.Controllers
 {
-    /// <summary>
-    /// Gestion des positions d'un portefeuille (ajout, édition, suppression).
-    /// Toujours associé à un portfolioId parent.
-    /// </summary>
     public class PositionsController : BaseController
     {
-        private readonly IApiService _api;
+        public PositionsController(IApiService api, ILogger<PositionsController> logger)
+            : base(api, logger) { }
 
-        public PositionsController(IApiService api) => _api = api;
-
-        // ── CREATE ────────────────────────────────────────────────────────
+        // ── CREATE ────────────────────────────────────────────────────────────
 
         [HttpGet]
         public async Task<IActionResult> Create(int portfolioId)
         {
-            var portfolio = await _api.GetPortfolioByIdAsync(portfolioId);
+            var portfolio = await ApiService.GetPortfolioByIdAsync(portfolioId);
             if (portfolio == null || portfolio.UserId != GetUserId())
                 return NotFound();
 
-            var assets = await _api.GetAllAssetsAsync();
+            var assets = await ApiService.GetAllAssetsAsync();
 
             return View(new PositionCreateViewModel
             {
                 PortfolioId = portfolioId,
                 PortfolioName = portfolio.Name,
-                PurchaseDate = DateTime.Today,
-                Assets = assets?.Select(a => new AssetSelectItem
+                BuyDate = DateTime.Today,
+                Assets = assets.Select(a => new AssetSelectItem
                 {
                     Id = a.Id,
-                    Ticker = a.Symbol,
+                    Ticker = a.Ticker,
                     Nom = a.Name,
-                    Type = a.AssetType ?? "Stock"
-                }).ToList() ?? new()
+                    Type = AssetHelper.GetTypeLabel(a)
+                }).ToList()
             });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(PositionCreateViewModel model)
         {
             if (!ModelState.IsValid)
             {
-                // Recharger les actifs si erreur
-                var assets = await _api.GetAllAssetsAsync();
-                model.Assets = assets?.Select(a => new AssetSelectItem
+                var assets = await ApiService.GetAllAssetsAsync();
+                model.Assets = assets.Select(a => new AssetSelectItem
                 {
                     Id = a.Id,
-                    Ticker = a.Symbol,
+                    Ticker = a.Ticker,
                     Nom = a.Name,
-                    Type = a.AssetType ?? "Stock"
-                }).ToList() ?? new();
+                    Type = AssetHelper.GetTypeLabel(a)
+                }).ToList();
                 return View(model);
             }
 
-            var position = new Position
-            {
-                PortfolioId = model.PortfolioId,
-                AssetId = model.AssetId,
-                Quantity = (double)model.Quantity,
-                PurchasePrice = (double)model.PurchasePrice,
-                PurchaseDate = model.PurchaseDate
-            };
+            // ✅ CreatePositionAsync(portfolioId, assetId, quantity, avgBuyPrice, buyDate)
+            var created = await ApiService.CreatePositionAsync(
+                model.PortfolioId, model.AssetId,
+                model.Quantity, model.AvgBuyPrice, model.BuyDate);
 
-            var created = await _api.CreatePositionAsync(position);
             if (created == null)
             {
-                ModelState.AddModelError(string.Empty, "Erreur lors de l'ajout de la position.");
-                var assets = await _api.GetAllAssetsAsync();
-                model.Assets = assets?.Select(a => new AssetSelectItem
+                ModelState.AddModelError(string.Empty,
+                    "Erreur. Cet actif est peut-être déjà dans ce portefeuille.");
+                var assets = await ApiService.GetAllAssetsAsync();
+                model.Assets = assets.Select(a => new AssetSelectItem
                 {
                     Id = a.Id,
-                    Ticker = a.Symbol,
+                    Ticker = a.Ticker,
                     Nom = a.Name,
-                    Type = a.AssetType ?? "Stock"
-                }).ToList() ?? new();
+                    Type = AssetHelper.GetTypeLabel(a)
+                }).ToList();
                 return View(model);
             }
 
-            TempData["SuccessMessage"] = "Position ajoutée avec succès.";
-            return RedirectToAction("Details", "Portfolios", new { id = model.PortfolioId });
+            SetSuccess("Position ajoutée avec succès.");
+            return RedirectToAction("Details", "Portfolios",
+                new { id = model.PortfolioId });
         }
 
-        // ── EDIT ──────────────────────────────────────────────────────────
+        // ── EDIT — clé composite (portfolioId + assetId) ──────────────────────
 
         [HttpGet]
-        public async Task<IActionResult> Edit(int id)
+        public async Task<IActionResult> Edit(int portfolioId, int assetId)
         {
-            var position = await _api.GetPositionByIdAsync(id);
-            if (position == null) return NotFound();
-
-            var portfolio = await _api.GetPortfolioByIdAsync(position.PortfolioId);
+            var portfolio = await ApiService.GetPortfolioByIdAsync(portfolioId);
             if (portfolio == null || portfolio.UserId != GetUserId())
                 return NotFound();
 
-            var asset = await _api.GetAssetByIdAsync(position.AssetId);
+            // ✅ GetPositionByKeyAsync(portfolioId, assetId)
+            var position = await ApiService.GetPositionByKeyAsync(portfolioId, assetId);
+            if (position == null) return NotFound();
+
+            var asset = await ApiService.GetAssetByIdAsync(assetId);
 
             return View(new PositionEditViewModel
             {
-                Id = position.Id,
-                PortfolioId = position.PortfolioId,
+                PortfolioId = portfolioId,
+                AssetId = assetId,
                 PortfolioName = portfolio.Name,
-                AssetTicker = asset?.Symbol ?? "—",
+                AssetTicker = asset?.Ticker ?? "—",
                 AssetNom = asset?.Name ?? "—",
-                Quantity = (decimal)position.Quantity,
-                PurchasePrice = (decimal)position.PurchasePrice,
-                PurchaseDate = position.PurchaseDate
+                Quantity = position.Quantity,
+                AvgBuyPrice = position.AvgBuyPrice,
+                BuyDate = position.BuyDate
             });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(PositionEditViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
 
-            var position = await _api.GetPositionByIdAsync(model.Id);
-            if (position == null) return NotFound();
-
-            var portfolio = await _api.GetPortfolioByIdAsync(position.PortfolioId);
+            var portfolio = await ApiService.GetPortfolioByIdAsync(model.PortfolioId);
             if (portfolio == null || portfolio.UserId != GetUserId())
                 return NotFound();
 
-            position.Quantity = (double)model.Quantity;
-            position.PurchasePrice = (double)model.PurchasePrice;
-            position.PurchaseDate = model.PurchaseDate;
+            // ✅ UpdatePositionAsync(portfolioId, assetId, quantity, avgBuyPrice, buyDate)
+            var ok = await ApiService.UpdatePositionAsync(
+                model.PortfolioId, model.AssetId,
+                model.Quantity, model.AvgBuyPrice, model.BuyDate);
 
-            var ok = await _api.UpdatePositionAsync(model.Id, position);
             if (!ok)
             {
                 ModelState.AddModelError(string.Empty, "Erreur lors de la mise à jour.");
                 return View(model);
             }
 
-            TempData["SuccessMessage"] = "Position mise à jour.";
-            return RedirectToAction("Details", "Portfolios", new { id = model.PortfolioId });
+            SetSuccess("Position mise à jour.");
+            return RedirectToAction("Details", "Portfolios",
+                new { id = model.PortfolioId });
         }
 
-        // ── DELETE (POST) ─────────────────────────────────────────────────
+        // ── DELETE ────────────────────────────────────────────────────────────
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id, int portfolioId)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(int portfolioId, int assetId)
         {
-            var portfolio = await _api.GetPortfolioByIdAsync(portfolioId);
+            var portfolio = await ApiService.GetPortfolioByIdAsync(portfolioId);
             if (portfolio == null || portfolio.UserId != GetUserId())
                 return NotFound();
 
-            await _api.DeletePositionAsync(id);
-            TempData["SuccessMessage"] = "Position supprimée.";
-            return RedirectToAction("Details", "Portfolios", new { id = portfolioId });
+            // ✅ DeletePositionAsync(portfolioId, assetId)
+            await ApiService.DeletePositionAsync(portfolioId, assetId);
+            SetSuccess("Position supprimée.");
+            return RedirectToAction("Details", "Portfolios",
+                new { id = portfolioId });
         }
     }
 }

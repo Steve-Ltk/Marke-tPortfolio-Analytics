@@ -1,5 +1,190 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AnalyticsIndexViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = "Analytics";
+    ViewData["Section"] = "Analytics";
+}
+
+<div id="analytics-root" data-portfolio-id="@Model.SelectedPortfolioId"></div>
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Analytics</div>
+        <div class="page-sub">Sharpe · Volatilité · Max Drawdown · Monte Carlo · Backtest · Markowitz</div>
+    </div>
+</div>
+
+@if (!Model.Portfolios.Any())
+{
+    <div style="text-align:center;padding:80px 0">
+        <div style="font-size:40px;margin-bottom:16px">📊</div>
+        <div style="font-family:Sora,sans-serif;font-size:18px;font-weight:700;margin-bottom:8px">
+            Aucun portefeuille à analyser
+        </div>
+        <div style="color:var(--t4);margin-bottom:24px">
+            Créez un portefeuille et ajoutez des positions.
+        </div>
+        <a href="/Portfolios/Create" class="btn btn-green btn-lg">Créer un portefeuille →</a>
+    </div>
+    return;
+}
+
+<!-- Sélecteur + paramètres -->
+<div class="card" style="margin-bottom:20px">
+    <form method="get" asp-action="Index" asp-controller="Analytics"
+          style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:200px">
+            <label style="font-size:11px;font-weight:600;color:var(--t4);letter-spacing:.08em;
+                          text-transform:uppercase;display:block;margin-bottom:6px">Portefeuille</label>
+            <select name="portfolioId" class="form-control" onchange="this.form.submit()">
+                @foreach (var p in Model.Portfolios)
+                {
+                    if (p.Id == Model.SelectedPortfolioId)
+                    {
+                        <option value="@p.Id" selected>@p.Name</option>
+                    }
+                    else
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                }
+            </select>
+        </div>
+        <div>
+            <label style="font-size:11px;font-weight:600;color:var(--t4);letter-spacing:.08em;
+                          text-transform:uppercase;display:block;margin-bottom:6px">Période</label>
+            <div style="display:flex;gap:8px">
+                <input type="date" name="dateDebut" class="form-control"
+                       value="@Model.DateDebut.ToString("yyyy-MM-dd")" style="width:150px" />
+                <input type="date" name="dateFin" class="form-control"
+                       value="@Model.DateFin.ToString("yyyy-MM-dd")" style="width:150px" />
+            </div>
+        </div>
+        <div>
+            <label style="font-size:11px;font-weight:600;color:var(--t4);letter-spacing:.08em;
+                          text-transform:uppercase;display:block;margin-bottom:6px">Taux sans risque %</label>
+            <input type="number" name="riskFree" class="form-control"
+                   value="@Model.TauxSansRisque" step="0.1" min="0" max="20" style="width:120px" />
+        </div>
+        <button type="submit" class="btn btn-green" style="height:44px">Analyser →</button>
+    </form>
+</div>
+
+@if (!Model.HasResult)
+{
+    <div style="text-align:center;padding:60px 0;color:var(--t4)">
+        <div style="font-size:36px;margin-bottom:16px">🔢</div>
+        <div style="font-size:15px;margin-bottom:8px;font-weight:600;color:var(--t2)">
+            Sélectionnez un portefeuille et cliquez sur Analyser
+        </div>
+    </div>
+    return;
+}
+
+@{
+    var a = Model.Analyse!;
+}
+
+<!-- Insight global -->
+<div class="insight-box @(Model.InsightNiveau == "Danger" ? "danger" : Model.InsightNiveau == "Insuffisant" ? "warning" : "")"
+     style="margin-bottom:20px">
+    @Model.InsightGlobal
+</div>
+
+<!-- KPIs principaux -->
+<div class="kpi-grid" style="margin-bottom:20px">
+    <div class="kpi" style="--accent:var(--green)">
+        <div class="kpi-label">Rendement annualisé</div>
+        <div class="kpi-val @(a.AnnualizedReturn >= 0 ? "green" : "red")">
+            @(a.AnnualizedReturn >= 0 ? "+" : "")@((a.AnnualizedReturn * 100).ToString("F2"))%
+        </div>
+        @if (Model.InsightCagr != null)
+        {
+            <div class="kpi-delta" style="color:@Model.InsightCagr.Couleur">@Model.InsightCagr.Niveau</div>
+        }
+        <div class="kpi-sub">CAGR sur la période</div>
+    </div>
+    <div class="kpi" style="--accent:var(--amber)">
+        <div class="kpi-label">Volatilité annualisée</div>
+        <div class="kpi-val amber">@((a.Volatility * 100).ToString("F2"))%</div>
+        @if (Model.InsightVolatilite != null)
+        {
+            <div class="kpi-delta" style="color:@Model.InsightVolatilite.Couleur">@Model.InsightVolatilite.Niveau</div>
+        }
+        <div class="kpi-sub">Écart-type annualisé</div>
+    </div>
+    <div class="kpi" style="--accent:var(--blue)">
+        <div class="kpi-label">Sharpe Ratio</div>
+        <div class="kpi-val @(a.SharpeRatio >= 1 ? "green" : a.SharpeRatio >= 0 ? "amber" : "red")">
+            @a.SharpeRatio.ToString("F3")
+        </div>
+        @if (Model.InsightSharpe != null)
+        {
+            <div class="kpi-delta" style="color:@Model.InsightSharpe.Couleur">@Model.InsightSharpe.Niveau</div>
+        }
+        <div class="kpi-sub">Taux sans risque : @Model.TauxSansRisque%</div>
+    </div>
+    <div class="kpi" style="--accent:var(--red)">
+        <div class="kpi-label">Max Drawdown</div>
+        <div class="kpi-val red">@((a.MaxDrawdown * 100).ToString("F2"))%</div>
+        @if (Model.InsightDrawdown != null)
+        {
+            <div class="kpi-delta" style="color:@Model.InsightDrawdown.Couleur">@Model.InsightDrawdown.Niveau</div>
+        }
+        <div class="kpi-sub">Perte maximale observée</div>
+    </div>
+</div>
+
+<!-- Onglets — gérés par analytics.js via data-tab-trigger / data-tab-panel -->
+<div style="display:flex;gap:4px;margin-bottom:16px;background:var(--dark-3);
+            border-radius:var(--radius-md);padding:4px;border:1px solid var(--border);
+            width:fit-content">
+    <button class="tab-btn active" data-tab-trigger="insights">Insights</button>
+    <button class="tab-btn" data-tab-trigger="montecarlo">Monte Carlo</button>
+    <button class="tab-btn" data-tab-trigger="backtest">Backtest</button>
+    <button class="tab-btn" data-tab-trigger="optimisation">Optimisation</button>
+    <button class="tab-btn" data-tab-trigger="comparaison">Comparaison</button>
+</div>
+
+<!-- Partials — tous chargés dans le DOM, affichage géré par analytics.js -->
+<div data-tab-panel="insights">
+    @await Html.PartialAsync("_Insights", Model)
+</div>
+<div data-tab-panel="montecarlo" style="display:none">
+    @await Html.PartialAsync("_MonteCarlo", Model)
+</div>
+<div data-tab-panel="backtest" style="display:none">
+    @await Html.PartialAsync("_Backtest", Model)
+</div>
+<div data-tab-panel="optimisation" style="display:none">
+    @await Html.PartialAsync("_Optimization", Model)
+</div>
+<div data-tab-panel="comparaison" style="display:none">
+    @await Html.PartialAsync("_Comparison", Model)
+</div>
+
+@section Scripts {
+    <link rel="stylesheet" href="~/css/mpa.css" />
+    <script src="~/js/charts.js"></script>
+    <script src="~/js/analytics.js"></script>
+    <style>
+        .tab-btn {
+            background: none;
+            color: var(--t4);
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all .15s;
+        }
+
+            .tab-btn.active {
+                background: var(--dark-2);
+                color: var(--t1);
+                border: 1px solid var(--border);
+            }
+    </style>
 }

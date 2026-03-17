@@ -1,5 +1,322 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.GoalWizardViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = "Mon Objectif";
+    ViewData["Section"] = "Mon Objectif";
+    int step = Model.Step;
+    var stepLabels = new[] { "", "Objectif", "Profil risque", "Portefeuille", "Simulation" };
+}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Mon Objectif</div>
+        <div class="page-sub">Robo-advisor simplifié — définissez votre stratégie en 4 étapes</div>
+    </div>
+</div>
+
+<!-- Progress bar — div uniquement (pas de span avec div imbriqué) -->
+<div style="display:flex;gap:0;margin-bottom:32px;max-width:780px;position:relative">
+    @for (int i = 1; i <= 4; i++)
+    {
+        bool isDone = i < step;
+        bool isCurrent = i == step;
+        string numColor = (isDone || isCurrent) ? "#050810" : "var(--t4)";
+        string bgColor = (isDone || isCurrent) ? "var(--green)" : "var(--dark-3)";
+        string bdColor = (isDone || isCurrent) ? "var(--green)" : "var(--border)";
+        string txtColor = isCurrent ? "var(--t1)" : isDone ? "var(--green)" : "var(--t4)";
+        string lineColor = isDone ? "var(--green)" : "var(--border)";
+
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative">
+            <div style="width:36px;height:36px;border-radius:50%;
+                            background:@bgColor;border:2px solid @bdColor;
+                            display:flex;align-items:center;justify-content:center;
+                            font-family:Sora,sans-serif;font-weight:800;font-size:13px;
+                            color:@numColor;position:relative;z-index:1">
+                @(isDone ? "✓" : i.ToString())
+            </div>
+            <div style="font-size:11px;font-weight:600;color:@txtColor">
+                @stepLabels[i]
+            </div>
+            @if (i < 4)
+            {
+                <div style="position:absolute;top:18px;left:68%;width:64%;height:2px;
+                                    background:@lineColor;z-index:0"></div>
+            }
+        </div>
+    }
+</div>
+
+<div style="max-width:800px">
+
+    @* ══════════════ ÉTAPE 1 — Objectif ══════════════ *@
+    @if (step == 1)
+    {
+        <form asp-action="Wizard" asp-controller="Goal" method="post"
+              asp-route-step="1">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="Step" value="1" />
+
+            <div class="card">
+                <div class="card-title" style="margin-bottom:6px">Quel est votre objectif principal ?</div>
+                <p style="font-size:13px;color:var(--t4);margin-bottom:24px">
+                    Votre objectif détermine la stratégie et le profil de risque recommandés.
+                </p>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+                    @{
+                        var objectifs = new[]
+                        {
+                                ("Retraite", "Retraite confortable",  "Constitution d'un capital long terme",  "🏖️"),
+                                ("Projet",   "Projet immobilier",      "Apport ou acquisition immobilière",     "🏠"),
+                                ("Épargne",  "Épargne de précaution",  "Sécuriser un capital accessible",       "🏦"),
+                                ("Revenu",   "Revenus complémentaires","Générer des dividendes réguliers",       "💰"),
+                                };
+                    }
+                    @foreach (var (val, label, desc, icon) in objectifs)
+                    {
+                        bool sel = Model.Objectif == val;
+                        string bdStyle = sel ? "var(--green)" : "var(--border)";
+                        string bgStyle = sel ? "rgba(0,208,132,.06)" : "var(--dark-4)";
+                        string cardId = "objcard-" + val;
+
+                        <label style="cursor:pointer">
+                            <input type="radio" name="Objectif" value="@val" style="display:none"
+                                   @(sel ? "checked" : "") />
+                            <div id="@cardId"
+                                 style="border:2px solid @bdStyle;background:@bgStyle;
+                                            border-radius:var(--radius-lg);padding:20px;transition:all .15s"
+                                 onclick="selectObjCard('@val')">
+                                <div style="font-size:28px;margin-bottom:10px">@icon</div>
+                                <div style="font-family:Sora,sans-serif;font-weight:700;font-size:14px;margin-bottom:4px">
+                                    @label
+                                </div>
+                                <div style="font-size:12px;color:var(--t4)">@desc</div>
+                            </div>
+                        </label>
+                    }
+                </div>
+
+                <button type="submit" class="btn btn-green btn-full btn-lg">
+                    Continuer → Profil de risque
+                </button>
+            </div>
+        </form>
+    }
+
+    @* ══════════════ ÉTAPE 2 — Profil de risque ══════════════ *@
+    else if (step == 2)
+    {
+        <form asp-action="Wizard" asp-controller="Goal" method="post"
+              asp-route-step="2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="Step" value="2" />
+            <input type="hidden" name="Objectif" value="@Model.Objectif" />
+
+            <div class="card">
+                <div class="card-title" style="margin-bottom:6px">
+                    Objectif : <span style="color:var(--green)">@Model.Objectif</span>
+                </div>
+                <p style="font-size:13px;color:var(--t4);margin-bottom:24px">
+                    Évaluez votre tolérance au risque et définissez votre horizon.
+                </p>
+
+                <div class="field">
+                    <label>
+                        Tolérance au risque :
+                        <strong id="score-label" style="color:var(--green)">@Model.ScoreRisque / 10</strong>
+                    </label>
+                    <input type="range" name="ScoreRisque" id="score-range"
+                           min="0" max="10" step="1" value="@Model.ScoreRisque"
+                           style="width:100%;margin-top:8px;accent-color:var(--green)"
+                           oninput="updateScore(this.value)" />
+                    <div style="display:flex;justify-content:space-between;font-size:11px;
+                                color:var(--t4);margin-top:4px">
+                        <span>0 — Très prudent</span>
+                        <span>5 — Équilibré</span>
+                        <span>10 — Très agressif</span>
+                    </div>
+                    <div id="risk-desc" class="insight-box" style="margin-top:12px;font-size:13px"></div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                    <div class="field">
+                        <label>Horizon d'investissement (ans)</label>
+                        <input type="number" name="HorizonAns" class="form-control"
+                               value="@Model.HorizonAns" min="1" max="50" />
+                    </div>
+                    <div class="field">
+                        <label>Capital initial (€)</label>
+                        <input type="number" name="CapitalInitial" class="form-control"
+                               value="@Model.CapitalInitial" min="1000" step="1000" />
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px">
+                    <a href="/Goal/Wizard?step=1" class="btn btn-ghost" style="width:120px;text-align:center">
+                        ← Retour
+                    </a>
+                    <button type="submit" class="btn btn-green" style="flex:1">
+                        Voir le portefeuille suggéré →
+                    </button>
+                </div>
+            </div>
+        </form>
+    }
+
+    @* ══════════════ ÉTAPE 3 — Portefeuille suggéré ══════════════ *@
+    else if (step == 3)
+    {
+        var t = Model.Template!;
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                    <div style="font-size:32px">@t.Icone</div>
+                    <div>
+                        <div class="card-title">@t.Nom</div>
+                        <div style="font-size:12px;color:var(--t4)">Score risque @Model.ScoreRisque/10</div>
+                    </div>
+                </div>
+                <p style="font-size:13px;color:var(--t3);margin-bottom:20px;line-height:1.6">
+                    @t.Description
+                </p>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
+                    <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">CAGR estimé</div>
+                        <div style="font-family:Sora,sans-serif;font-weight:800;font-size:22px;
+                                    color:var(--green)">
+                            ~@t.CagrEstime%/an
+                        </div>
+                    </div>
+                    <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Volatilité estimée</div>
+                        <div style="font-family:Sora,sans-serif;font-weight:800;font-size:22px;
+                                    color:@t.Couleur">
+                            ~@t.VolatiliteEstimee%
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    @foreach (var alloc in t.Allocation)
+                    {
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <div style="font-size:13px;font-weight:700;width:60px">@alloc.Ticker</div>
+                            <div style="flex:1;height:8px;background:var(--dark-4);
+                                            border-radius:999px;overflow:hidden">
+                                <div style="width:@alloc.Poids%;height:100%;
+                                                background:@alloc.Couleur;border-radius:999px"></div>
+                            </div>
+                            <div style="font-size:13px;font-weight:700;width:40px;text-align:right">
+                                @alloc.Poids%
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px">
+                <div class="card">
+                    <div class="card-title" style="margin-bottom:12px">Votre configuration</div>
+                    @{
+                        var rows = new[]
+                        {
+                                ("Objectif",      Model.Objectif,                        ""),
+                                ("Profil risque", Model.ScoreRisque + " / 10",           ""),
+                                ("Horizon",       Model.HorizonAns + " ans",             ""),
+                                ("Capital",       "€" + Model.CapitalInitial.ToString("N0"), "var(--green)"),
+                                };
+                    }
+                    <div style="display:flex;flex-direction:column;gap:0">
+                        @foreach (var (lbl, val, col) in rows)
+                        {
+                            <div style="display:flex;justify-content:space-between;padding:10px 0;
+                                            border-bottom:1px solid var(--border-2)">
+                                <span style="font-size:13px;color:var(--t4)">@lbl</span>
+                                @if (string.IsNullOrEmpty(col))
+                                {
+                                    <strong>@val</strong>
+                                }
+                                else
+                                {
+                                    <strong style="color:@col">@val</strong>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <form asp-action="Wizard" asp-controller="Goal" method="post"
+                      asp-route-step="3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="Step" value="3" />
+                    <input type="hidden" name="Objectif" value="@Model.Objectif" />
+                    <input type="hidden" name="ScoreRisque" value="@Model.ScoreRisque" />
+                    <input type="hidden" name="HorizonAns" value="@Model.HorizonAns" />
+                    <input type="hidden" name="CapitalInitial" value="@Model.CapitalInitial" />
+                    <button type="submit" class="btn btn-green btn-full btn-lg">
+                        🔮 Lancer la simulation Monte Carlo →
+                    </button>
+                </form>
+
+                <a href="/Goal/Wizard?step=2" class="btn btn-ghost btn-full" style="text-align:center">
+                    ← Modifier le profil
+                </a>
+            </div>
+        </div>
+    }
+
+</div>
+
+@section Scripts {
+    <script>
+        // ── Objectif cards ────────────────────────────────────────────────────
+        function selectObjCard(val) {
+            var allIds = ['Retraite', 'Projet', 'Épargne', 'Revenu'];
+            allIds.forEach(function(id) {
+                var c = document.getElementById('objcard-' + id);
+                if (c) {
+                    c.style.borderColor = 'var(--border)';
+                    c.style.background  = 'var(--dark-4)';
+                }
+            });
+            var sel = document.getElementById('objcard-' + val);
+            if (sel) {
+                sel.style.borderColor = 'var(--green)';
+                sel.style.background  = 'rgba(0,208,132,.06)';
+            }
+            var inputs = document.querySelectorAll('input[name="Objectif"]');
+            inputs.forEach(function(inp) {
+                inp.checked = (inp.value === val);
+            });
+        }
+
+        // ── Score risque slider ───────────────────────────────────────────────
+        var riskDescs = {
+            '0': 'Très prudent — Préservation maximale du capital.',
+            '1': 'Prudent — Légère tolérance au risque pour un rendement supérieur au livret.',
+            '2': 'Prudent modéré — Faible tolérance aux baisses.',
+            '3': 'Modéré prudent — Mix majoritairement obligations.',
+            '4': 'Équilibré prudent — 60% actions, 40% obligations.',
+            '5': 'Équilibré — Mix 50/50 classique.',
+            '6': 'Équilibré dynamique — Biais actions.',
+            '7': 'Dynamique — 70-80% actions croissance.',
+            '8': 'Dynamique agressif — Forte concentration tech.',
+            '9': 'Agressif — Actions growth uniquement.',
+            '10': 'Très agressif — Volatilité extrême acceptée.'
+        };
+
+        function updateScore(val) {
+            var lbl  = document.getElementById('score-label');
+            var desc = document.getElementById('risk-desc');
+            if (lbl)  lbl.textContent  = val + ' / 10';
+            if (desc) desc.textContent = riskDescs[val] || '';
+        }
+
+        // Init slider au chargement
+        (function() {
+            var range = document.getElementById('score-range');
+            if (range) updateScore(range.value);
+        })();
+    </script>
 }

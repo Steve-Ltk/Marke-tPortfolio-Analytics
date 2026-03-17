@@ -5,9 +5,7 @@
     ViewData["Section"] = "Accueil";
 }
 
-@* ══════════════════════════════════════════════════════════════════════
-   ONBOARDING — aucun portefeuille
-   ══════════════════════════════════════════════════════════════════════ *@
+@* ══ ONBOARDING ══ *@
 @if (!Model.HasPortfolios)
 {
     <div class="page-header">
@@ -16,22 +14,30 @@
             <div class="page-sub">Bienvenue sur Catalis — commençons.</div>
         </div>
     </div>
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;gap:24px">
-        <div style="width:80px;height:80px;background:var(--green-faint);border:1px solid rgba(0,208,132,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px">📊</div>
-        <div>
-            <div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px">Aucun portefeuille pour l'instant</div>
-            <div style="color:var(--t4);font-size:14px;max-width:400px">Créez votre premier portefeuille et ajoutez des positions pour voir vos analyses.</div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    min-height:400px;text-align:center;gap:24px">
+        <div style="width:80px;height:80px;background:var(--green-faint);
+                        border:1px solid rgba(0,208,132,.2);border-radius:50%;
+                        display:flex;align-items:center;justify-content:center;font-size:32px">
+            📊
         </div>
-        <a href="/Portfolios/Create" class="btn btn-green btn-lg">+ Créer mon premier portefeuille →</a>
+        <div>
+            <div style="font-family:'Sora',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px">
+                Aucun portefeuille pour l'instant
+            </div>
+            <div style="color:var(--t4);font-size:14px;max-width:400px">
+                Créez votre premier portefeuille et ajoutez des positions pour voir vos analyses.
+            </div>
+        </div>
+        <a href="/Portfolios/Create" class="btn btn-green btn-lg">
+            + Créer mon premier portefeuille →
+        </a>
     </div>
     return;
 }
 
-@* ══════════════════════════════════════════════════════════════════════
-   DASHBOARD PRINCIPAL
-   ══════════════════════════════════════════════════════════════════════ *@
+@* ══ DASHBOARD PRINCIPAL ══ *@
 
-<!-- En-tête -->
 <div class="page-header">
     <div>
         <div class="page-title">Bonjour, @Model.UserName 👋</div>
@@ -49,7 +55,8 @@
         <svg viewBox="0 0 80 80">
             <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="7" />
             <circle cx="40" cy="40" r="34" fill="none" stroke="@Model.ScoreCouleur" stroke-width="7"
-                    stroke-dasharray="213.6" stroke-dashoffset="@Model.ScoreOffset.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)"
+                    stroke-dasharray="213.6"
+                    stroke-dashoffset="@Model.ScoreOffset.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)"
                     stroke-linecap="round" />
         </svg>
         <div class="score-ring-num">
@@ -95,42 +102,45 @@
             @Model.SharpeRatio.ToString("F2")
         </div>
         <div class="kpi-delta" style="color:var(--t4)">
-            @(Model.SharpeRatio > 2 ? "Excellent" : Model.SharpeRatio > 1 ? "Bon" : Model.SharpeRatio > 0 ? "Insuffisant" : "Danger")
+            @(Model.SharpeRatio > 2 ? "Excellent" : Model.SharpeRatio > 1 ? "Bon" :
+                        Model.SharpeRatio > 0 ? "Insuffisant" : "Danger")
         </div>
         <div class="kpi-sub">Seuil excellent : > 2</div>
     </div>
     <div class="kpi" style="--accent:var(--purple)">
         <div class="kpi-label">Score</div>
-        <div class="kpi-val" style="color:@Model.ScoreCouleur">@Model.ScoreInvestisseur<span style="font-size:14px;font-weight:400">/100</span></div>
+        <div class="kpi-val" style="color:@Model.ScoreCouleur">
+            @Model.ScoreInvestisseur<span style="font-size:14px;font-weight:400">/100</span>
+        </div>
         <div class="kpi-delta" style="color:var(--t4)">@Model.ScoreNiveau</div>
         <div class="kpi-sub">Basé sur 6 critères</div>
     </div>
 </div>
 
-<!-- Graphique + Allocation -->
+<!-- Allocation + Résumé -->
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:24px">
-
-    <!-- Allocation donut -->
     <div class="card">
         <div class="card-header">
-            <div><div class="card-title">Allocation du portefeuille</div><div class="card-sub">Répartition par valeur actuelle</div></div>
+            <div>
+                <div class="card-title">Allocation du portefeuille</div>
+                <div class="card-sub">Répartition par valeur actuelle</div>
+            </div>
         </div>
         @if (Model.Allocation.Any())
         {
             <div style="display:flex;align-items:center;gap:24px">
                 <svg viewBox="0 0 110 110" style="width:110px;height:110px;flex-shrink:0">
                     @{
-                        double cumul = 0;
-                        double circonference = 251.2;
+                        double cumul = 0; double circ = 251.2;
                     }
                     <circle cx="55" cy="55" r="40" fill="none" stroke="var(--dark-4)" stroke-width="18" />
                     @foreach (var item in Model.Allocation)
                     {
-                        double offset = circonference * (1 - (double)item.Poids / 100);
-                        double rotation = -90 + (cumul / 100 * 360);
+                        double rot = -90 + (cumul / 100 * 360);
                         <circle cx="55" cy="55" r="40" fill="none" stroke="@item.Couleur" stroke-width="18"
-                                stroke-dasharray="@circonference" stroke-dashoffset="@(circonference - circonference * (double)item.Poids / 100)"
-                                transform="rotate(@rotation.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) 55 55)" />
+                                stroke-dasharray="@circ"
+                                stroke-dashoffset="@(circ - circ * (double)item.Poids / 100)"
+                                transform="rotate(@rot.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) 55 55)" />
                         cumul += (double)item.Poids;
                     }
                     <text x="55" y="51" text-anchor="middle" fill="white" font-family="Sora" font-size="13" font-weight="800">@Model.Positions.Count</text>
@@ -154,30 +164,23 @@
         }
     </div>
 
-    <!-- Stats rapides -->
     <div class="card">
         <div class="card-header"><div class="card-title">Résumé</div></div>
         <div style="display:flex;flex-direction:column;gap:0">
-            <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border-2)">
-                <span style="font-size:13px;color:var(--t4)">Portefeuilles</span>
-                <span style="font-weight:700">@Model.NbPortfolios</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border-2)">
-                <span style="font-size:13px;color:var(--t4)">Positions</span>
-                <span style="font-weight:700">@Model.Positions.Count</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border-2)">
-                <span style="font-size:13px;color:var(--t4)">Valeur EUR</span>
-                <span style="font-weight:700;color:var(--green)">€@Model.ValeurTotaleEur.ToString("N2")</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border-2)">
-                <span style="font-size:13px;color:var(--t4)">Valeur USD</span>
-                <span style="font-weight:700">$@Model.ValeurTotaleUsd.ToString("N2")</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:12px 0">
-                <span style="font-size:13px;color:var(--t4)">Taux EUR/USD</span>
-                <span style="font-weight:700">@Model.TauxEurUsd.ToString("F4")</span>
-            </div>
+            @foreach (var (label, val, color) in new[]
+                        {
+                        ("Portefeuilles", Model.NbPortfolios.ToString(),                    ""),
+                        ("Positions",     Model.Positions.Count.ToString(),                 ""),
+                        ("Valeur EUR",    "€" + Model.ValeurTotaleEur.ToString("N2"),       "var(--green)"),
+                        ("Valeur USD",    "$" + Model.ValeurTotaleUsd.ToString("N2"),       ""),
+                        ("Taux EUR/USD",  Model.TauxEurUsd.ToString("F4"),                  ""),
+                        })
+            {
+                <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-2)">
+                    <span style="font-size:13px;color:var(--t4)">@label</span>
+                    <span style="font-weight:700;@(string.IsNullOrEmpty(color) ? "" : $"color:{color}")">@val</span>
+                </div>
+            }
         </div>
         <a href="/Analytics" class="btn btn-green btn-full" style="margin-top:16px;height:40px;font-size:13px">
             Analyse complète →
@@ -190,18 +193,21 @@
 {
     <div class="card">
         <div class="card-header">
-            <div><div class="card-title">Toutes les positions</div><div class="card-sub">@Model.Positions.Count actif(s) · Tri par valeur</div></div>
-            <a href="/Portfolios" class="btn btn-ghost" style="font-size:12px;padding:0 12px;height:30px">Gérer</a>
+            <div>
+                <div class="card-title">Toutes les positions</div>
+                <div class="card-sub">@Model.Positions.Count actif(s) · Tri par valeur</div>
+            </div>
+            <a href="/Portfolios" class="btn btn-ghost btn-sm">Gérer</a>
         </div>
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
                         <th>Actif</th>
-                        <th>Qté</th>
-                        <th>Prix achat</th>
+                        <th>Quantité</th>
+                        <th>Prix achat moy.</th>
                         <th>Prix actuel</th>
-                        <th>Valeur (EUR)</th>
+                        <th>Valeur EUR</th>
                         <th>P&amp;L</th>
                         <th>Poids</th>
                     </tr>
@@ -215,7 +221,8 @@
                                 <div class="td-name">@pos.Nom</div>
                             </td>
                             <td>@pos.Quantite.ToString("G")</td>
-                            <td>@pos.Devise @pos.PrixMoyen.ToString("N2")</td>
+                            {{!-- ✅ AvgBuyPrice (pas PrixMoyen) --}}
+                            <td>@pos.Devise @pos.AvgBuyPrice.ToString("N2")</td>
                             <td>@pos.Devise @pos.PrixActuel.ToString("N2")</td>
                             <td style="font-weight:600">€@pos.ValeurEur.ToString("N2")</td>
                             <td class="@(pos.PnlPct >= 0 ? "td-up" : "td-dn")">

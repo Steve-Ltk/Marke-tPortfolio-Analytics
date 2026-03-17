@@ -1,223 +1,188 @@
-﻿using Marke_tPortfolio_Analytics_web.ViewModels;
+﻿using Marke_tPortfolio_Analytics_web.Helpers;
 using Marke_tPortfolio_Analytics_web.Services;
-using MarketPortfolioAnalytics.Models;
+using Marke_tPortfolio_Analytics_web.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Marke_tPortfolio_Analytics_web.Controllers
 {
-    /// <summary>
-    /// CRUD portefeuilles + vue détaillée avec positions.
-    /// </summary>
     public class PortfoliosController : BaseController
     {
-        private readonly IApiService _api;
-        private readonly ILogger<PortfoliosController> _logger;
-
         public PortfoliosController(IApiService api, ILogger<PortfoliosController> logger)
-        {
-            _api = api;
-            _logger = logger;
-        }
+            : base(api, logger) { }
 
-        // ── INDEX — liste des portefeuilles ───────────────────────────────
+        // ── INDEX ─────────────────────────────────────────────────────────────
 
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            var portfolios = await _api.GetPortfoliosByUserAsync(GetUserId());
-            var tauxEurUsd = await _api.GetExchangeRateAsync("EUR", "USD");
+            int userId = GetUserId() ?? 0;
+            var portfolios = await ApiService.GetPortfoliosByUserAsync(userId);
+            var taux = await ApiService.GetExchangeRateAsync("EUR", "USD");
 
             var cards = new List<PortfolioCard>();
-            decimal valeurGlobale = 0m;
+            decimal total = 0m;
 
-            foreach (var p in portfolios ?? new())
+            foreach (var p in portfolios)
             {
-                var positions = await _api.GetPositionsByPortfolioAsync(p.Id);
-                decimal valeurEur = 0m;
+                var positions = await ApiService.GetPositionsByPortfolioAsync(p.Id);
+                decimal valeur = 0m;
 
                 foreach (var pos in positions ?? new())
                 {
-                    var asset = await _api.GetAssetByIdAsync(pos.AssetId);
+                    var asset = await ApiService.GetAssetByIdAsync(pos.AssetId);
                     if (asset == null) continue;
-                    var prix = await _api.GetLatestPriceAsync(asset.Symbol) ?? (decimal)pos.PurchasePrice;
-                    bool isUsd = !asset.Symbol.EndsWith(".PA");
-                    decimal val = prix * (decimal)pos.Quantity;
-                    valeurEur += isUsd && tauxEurUsd > 0 ? val / tauxEurUsd : val;
+                    decimal prix = await ApiService.GetLatestPriceAsync(asset.Ticker)
+                                    ?? pos.AvgBuyPrice;
+                    bool isUsd = AssetHelper.IsUsd(asset);
+                    decimal val = prix * pos.Quantity;
+                    valeur += isUsd && taux > 0 ? val / taux : val;
                 }
 
-                valeurGlobale += valeurEur;
+                total += valeur;
                 cards.Add(new PortfolioCard
                 {
                     Portfolio = p,
-                    ValeurEur = Math.Round(valeurEur, 2),
-                    NbPositions = positions?.Count ?? 0,
-                    // Sharpe/Volatilité : placeholders Phase 3, calculés en Phase 5
-                    SharpeRatio = 0,
-                    Volatilite = 0,
-                    RendementPct = 0
+                    ValeurEur = Math.Round(valeur, 2),
+                    NbPositions = positions?.Count ?? 0
                 });
             }
 
             return View(new PortfolioIndexViewModel
             {
                 Portfolios = cards,
-                ValeurTotaleEur = Math.Round(valeurGlobale, 2)
+                ValeurTotaleEur = Math.Round(total, 2)
             });
         }
 
-        // ── DETAILS ───────────────────────────────────────────────────────
+        // ── DETAILS ───────────────────────────────────────────────────────────
 
         [HttpGet]
         public async Task<IActionResult> Details(int id)
         {
-            var portfolio = await _api.GetPortfolioByIdAsync(id);
+            var portfolio = await ApiService.GetPortfolioByIdAsync(id);
             if (portfolio == null || portfolio.UserId != GetUserId())
                 return NotFound();
 
-            var positions = await _api.GetPositionsByPortfolioAsync(id);
-            var tauxEurUsd = await _api.GetExchangeRateAsync("EUR", "USD");
+            var positions = await ApiService.GetPositionsByPortfolioAsync(id);
+            var taux = await ApiService.GetExchangeRateAsync("EUR", "USD");
 
-            decimal valeurTotale = 0m;
+            decimal total = 0m;
             var details = new List<PositionDetail>();
 
             foreach (var pos in positions ?? new())
             {
-                var asset = await _api.GetAssetByIdAsync(pos.AssetId);
+                var asset = await ApiService.GetAssetByIdAsync(pos.AssetId);
                 if (asset == null) continue;
 
-                decimal prixActuel = await _api.GetLatestPriceAsync(asset.Symbol) ?? (decimal)pos.PurchasePrice;
-                bool isUsd = !asset.Symbol.EndsWith(".PA");
+                decimal prix = await ApiService.GetLatestPriceAsync(asset.Ticker)
+                                 ?? pos.AvgBuyPrice;
+                bool isUsd = AssetHelper.IsUsd(asset);
+                decimal valDev = prix * pos.Quantity;
+                decimal valEur = isUsd && taux > 0 ? valDev / taux : valDev;
+                decimal coutEur = isUsd && taux > 0
+                    ? pos.AvgBuyPrice * pos.Quantity / taux
+                    : pos.AvgBuyPrice * pos.Quantity;
+                decimal pnlEur = valEur - coutEur;
+                decimal pnlPct = coutEur > 0 ? pnlEur / coutEur * 100 : 0;
 
-                decimal valeurDevise = prixActuel * (decimal)pos.Quantity;
-                decimal valeurEur = isUsd && tauxEurUsd > 0 ? valeurDevise / tauxEurUsd : valeurDevise;
-                decimal coutEur = isUsd && tauxEurUsd > 0
-                    ? (decimal)pos.PurchasePrice * (decimal)pos.Quantity / tauxEurUsd
-                    : (decimal)pos.PurchasePrice * (decimal)pos.Quantity;
-
-                decimal pnlEur = valeurEur - coutEur;
-                decimal pnlPct = coutEur > 0 ? (pnlEur / coutEur) * 100 : 0;
-
-                valeurTotale += valeurEur;
-
+                total += valEur;
                 details.Add(new PositionDetail
                 {
                     Position = pos,
-                    Ticker = asset.Symbol,
+                    Ticker = asset.Ticker,
                     NomActif = asset.Name,
-                    TypeActif = asset.AssetType ?? "Stock",
-                    PrixActuel = Math.Round(prixActuel, 2),
-                    ValeurEur = Math.Round(valeurEur, 2),
+                    TypeActif = AssetHelper.GetTypeLabel(asset),
+                    PrixActuel = Math.Round(prix, 2),
+                    ValeurEur = Math.Round(valEur, 2),
                     PnlPct = Math.Round(pnlPct, 2),
                     PnlEur = Math.Round(pnlEur, 2),
                     Devise = isUsd ? "USD" : "EUR"
                 });
             }
 
-            // Poids
             foreach (var d in details)
-                d.Poids = valeurTotale > 0
-                    ? Math.Round(d.ValeurEur / valeurTotale * 100, 1)
-                    : 0;
+                d.Poids = total > 0 ? Math.Round(d.ValeurEur / total * 100, 1) : 0;
 
             return View(new PortfolioDetailsViewModel
             {
                 Portfolio = portfolio,
                 Positions = details,
-                ValeurTotaleEur = Math.Round(valeurTotale, 2),
-                TauxEurUsd = tauxEurUsd
+                ValeurTotaleEur = Math.Round(total, 2),
+                TauxEurUsd = taux
             });
         }
 
-        // ── CREATE ────────────────────────────────────────────────────────
+        // ── CREATE ────────────────────────────────────────────────────────────
 
         [HttpGet]
         public IActionResult Create()
-        {
-            ViewData["Title"] = "Nouveau portefeuille";
-            return View(new PortfolioCreateViewModel());
-        }
+            => View(new PortfolioCreateViewModel());
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(PortfolioCreateViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
 
-            var portfolio = new Portfolio
-            {
-                Name = model.Name,
-                Description = model.Description,
-                Currency = model.Currency,
-                UserId = GetUserId(),
-                CreatedAt = DateTime.UtcNow
-            };
+            // ✅ CreatePortfolioAsync(name, currency, userId) — sans Description
+            var created = await ApiService.CreatePortfolioAsync(
+                model.Name, model.Currency, GetUserId() ?? 0);
 
-            var created = await _api.CreatePortfolioAsync(portfolio);
             if (created == null)
             {
-                ModelState.AddModelError(string.Empty, "Erreur lors de la création du portefeuille.");
+                ModelState.AddModelError(string.Empty, "Erreur lors de la création.");
                 return View(model);
             }
 
-            TempData["SuccessMessage"] = $"Portefeuille « {created.Name} » créé avec succès !";
+            SetSuccess($"Portefeuille « {created.Name} » créé !");
             return RedirectToAction(nameof(Details), new { id = created.Id });
         }
 
-        // ── EDIT ──────────────────────────────────────────────────────────
+        // ── EDIT ──────────────────────────────────────────────────────────────
 
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
-            var portfolio = await _api.GetPortfolioByIdAsync(id);
-            if (portfolio == null || portfolio.UserId != GetUserId())
-                return NotFound();
+            var p = await ApiService.GetPortfolioByIdAsync(id);
+            if (p == null || p.UserId != GetUserId()) return NotFound();
 
             return View(new PortfolioEditViewModel
             {
-                Id = portfolio.Id,
-                Name = portfolio.Name,
-                Description = portfolio.Description,
-                Currency = portfolio.Currency
+                Id = p.Id,
+                Name = p.Name,
+                Currency = p.Currency
+                // ✅ Pas de Description — Portfolio n'a pas ce champ
             });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(PortfolioEditViewModel model)
         {
             if (!ModelState.IsValid) return View(model);
 
-            var portfolio = await _api.GetPortfolioByIdAsync(model.Id);
-            if (portfolio == null || portfolio.UserId != GetUserId())
-                return NotFound();
+            var p = await ApiService.GetPortfolioByIdAsync(model.Id);
+            if (p == null || p.UserId != GetUserId()) return NotFound();
 
-            portfolio.Name = model.Name;
-            portfolio.Description = model.Description;
-            portfolio.Currency = model.Currency;
-
-            var ok = await _api.UpdatePortfolioAsync(model.Id, portfolio);
-            if (!ok)
+            // ✅ UpdatePortfolioAsync(id, name, currency) — sans Description ni userId
+            if (!await ApiService.UpdatePortfolioAsync(model.Id, model.Name, model.Currency))
             {
                 ModelState.AddModelError(string.Empty, "Erreur lors de la mise à jour.");
                 return View(model);
             }
 
-            TempData["SuccessMessage"] = "Portefeuille mis à jour.";
+            SetSuccess("Portefeuille mis à jour.");
             return RedirectToAction(nameof(Details), new { id = model.Id });
         }
 
-        // ── DELETE (POST) ─────────────────────────────────────────────────
+        // ── DELETE ────────────────────────────────────────────────────────────
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
-            var portfolio = await _api.GetPortfolioByIdAsync(id);
-            if (portfolio == null || portfolio.UserId != GetUserId())
-                return NotFound();
+            var p = await ApiService.GetPortfolioByIdAsync(id);
+            if (p == null || p.UserId != GetUserId()) return NotFound();
 
-            await _api.DeletePortfolioAsync(id);
-            TempData["SuccessMessage"] = $"Portefeuille « {portfolio.Name} » supprimé.";
+            await ApiService.DeletePortfolioAsync(id);
+            SetSuccess($"Portefeuille « {p.Name} » supprimé.");
             return RedirectToAction(nameof(Index));
         }
     }

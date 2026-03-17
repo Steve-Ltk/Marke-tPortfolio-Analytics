@@ -1,0 +1,117 @@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AnalyticsIndexViewModel
+@{
+    var a = Model.Analyse!;
+    var items = new (string Titre, Marke_tPortfolio_Analytics_web.Helpers.InsightHelper.InsightResult? Insight, string Valeur)[]
+    {
+        ("Sharpe Ratio",    Model.InsightSharpe,     a.SharpeRatio.ToString("F3")),
+        ("Volatilité",      Model.InsightVolatilite, (a.Volatility * 100).ToString("F2") + "%"),
+        ("Max Drawdown",    Model.InsightDrawdown,   (a.MaxDrawdown * 100).ToString("F2") + "%"),
+        ("CAGR",            Model.InsightCagr,       (a.AnnualizedReturn * 100).ToString("F2") + "%"),
+    };
+}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    @foreach (var item in items)
+    {
+        if (item.Insight == null) { continue; }
+        <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div>
+                    <div class="card-title">@item.Titre</div>
+                    <div style="font-family:Sora,sans-serif;font-size:26px;font-weight:800;
+                                    color:@item.Insight.Couleur;margin-top:6px">
+                        @item.Valeur
+                    </div>
+                </div>
+                <span style="background:rgba(128,128,128,.12);color:@item.Insight.Couleur;
+                                 padding:5px 14px;border-radius:999px;font-size:12px;font-weight:600">
+                    @item.Insight.Niveau
+                </span>
+            </div>
+            <div style="font-size:13px;color:var(--t2);margin-bottom:10px;
+                            font-weight:500;line-height:1.4">
+                @item.Insight.Signification
+            </div>
+            <div style="font-size:12px;color:var(--t4);margin-bottom:6px">
+                <strong style="color:var(--t3)">Cause :</strong> @item.Insight.Cause
+            </div>
+            <div style="font-size:12px;color:var(--green)">
+                <strong>→ Action :</strong> @item.Insight.Action
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Métriques additionnelles -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+    <div style="background:var(--dark-3);border:1px solid var(--border);
+                border-radius:var(--radius-lg);padding:16px 18px">
+        <div class="kpi-label">Rendement total</div>
+        <div style="font-family:Sora,sans-serif;font-size:22px;font-weight:800;
+                    color:@(a.TotalReturnPct >= 0 ? "var(--green)" : "var(--red)")">
+            @(a.TotalReturnPct >= 0 ? "+" : "")@a.TotalReturnPct.ToString("F2")%
+        </div>
+    </div>
+    <div style="background:var(--dark-3);border:1px solid var(--border);
+                border-radius:var(--radius-lg);padding:16px 18px">
+        <div class="kpi-label">P&amp;L total</div>
+        <div style="font-family:Sora,sans-serif;font-size:22px;font-weight:800;
+                    color:@(a.TotalPnL >= 0 ? "var(--green)" : "var(--red)")">
+            @(a.TotalPnL >= 0 ? "+" : "")€@a.TotalPnL.ToString("N0")
+        </div>
+    </div>
+    <div style="background:var(--dark-3);border:1px solid var(--border);
+                border-radius:var(--radius-lg);padding:16px 18px">
+        <div class="kpi-label">Valeur actuelle</div>
+        <div style="font-family:Sora,sans-serif;font-size:22px;font-weight:800;color:var(--green)">
+            €@a.TotalCurrentValue.ToString("N0")
+        </div>
+    </div>
+</div>
+
+<!-- Détail par position -->
+@if (a.Positions.Any())
+{
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">Détail par position</div>
+                <div class="card-sub">@a.Positions.Count actif(s) · @a.PortfolioName</div>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Actif</th>
+                        <th>Quantité</th>
+                        <th>Prix achat</th>
+                        <th>Prix actuel</th>
+                        <th>Valeur</th>
+                        <th>P&amp;L</th>
+                        <th>Poids</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var pos in a.Positions.OrderByDescending(p => p.WeightPct))
+                    {
+                        <tr>
+                            <td>
+                                <div class="td-ticker">@pos.Ticker</div>
+                                <div class="td-name">@pos.AssetName</div>
+                            </td>
+                            <td>@pos.Quantity.ToString("G")</td>
+                            <td>@pos.AvgBuyPrice.ToString("N2")</td>
+                            <td>@pos.CurrentPrice.ToString("N2")</td>
+                            <td style="font-weight:600">€@pos.CurrentValue.ToString("N2")</td>
+                            <td class="@(pos.ReturnPct >= 0 ? "td-up" : "td-dn")">
+                                @(pos.ReturnPct >= 0 ? "+" : "")@pos.ReturnPct.ToString("F2")%
+                            </td>
+                            <td>@pos.WeightPct.ToString("F1")%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

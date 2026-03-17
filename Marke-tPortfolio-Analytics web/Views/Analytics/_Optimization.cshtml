@@ -1,5 +1,87 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AnalyticsIndexViewModel
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- Paramètres -->
+    <div class="card">
+        <div class="card-header"><div class="card-title">Optimisation Markowitz</div></div>
+        <div class="field">
+            <label>Objectif</label>
+            <select id="opt-target" class="form-control">
+                <option value="MaxSharpe">Maximiser le Sharpe Ratio</option>
+                <option value="MinVolatility">Minimiser la volatilité</option>
+                <option value="MaxReturn">Maximiser le rendement</option>
+            </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="field">
+                <label>Date début</label>
+                <input type="date" id="opt-debut" class="form-control"
+                       value="@Model.DateDebut.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label>Date fin</label>
+                <input type="date" id="opt-fin" class="form-control"
+                       value="@Model.DateFin.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+        <button id="btn-opt" class="btn btn-green btn-full btn-lg">
+            🎯 Optimiser le portefeuille
+        </button>
+        <div class="insight-box" style="margin-top:16px;font-size:12px">
+            <strong>Frontière efficiente de Markowitz</strong> — calcule les poids maximisant
+            le Sharpe Ratio parmi 500 portefeuilles simulés. Basé sur l'historique.
+        </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="opt-spinner" class="card" style="display:none;align-items:center;
+         justify-content:center;min-height:240px">
+        <div style="text-align:center;color:var(--t4)">
+            <div style="font-size:36px;margin-bottom:12px">⏳</div>
+            <div style="font-weight:600">Optimisation en cours…</div>
+            <div style="font-size:12px;margin-top:6px">Calcul de la frontière efficiente</div>
+        </div>
+    </div>
+
+    <!-- Résultats -->
+    <div id="opt-result" style="display:none">
+        <div class="card">
+            <div class="card-header"><div class="card-title">Allocation optimale</div></div>
+
+            <!-- Métriques optimales -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+                <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Rendement attendu</div>
+                    <div id="opt-ret" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px;color:var(--green)">—</div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Volatilité</div>
+                    <div id="opt-vol" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px;color:var(--amber)">—</div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Sharpe optimal</div>
+                    <div id="opt-sharpe" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px;color:var(--blue)">—</div>
+                </div>
+            </div>
+
+            <!-- Delta vs actuel -->
+            <div style="text-align:center;margin-bottom:14px;font-size:13px;color:var(--t4)">
+                Amélioration Sharpe vs actuel :
+                <strong id="opt-delta" style="font-size:15px">—</strong>
+            </div>
+
+            <!-- Barres de poids -->
+            <div class="card-header" style="margin-bottom:10px">
+                <div class="card-title" style="font-size:13px">Poids optimaux recommandés</div>
+            </div>
+            <div id="opt-weights" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+
+            <!-- Frontière efficiente -->
+            <div class="card-header" style="margin-bottom:10px">
+                <div class="card-title" style="font-size:13px">Frontière efficiente</div>
+            </div>
+            <canvas id="opt-frontier" height="200"></canvas>
+        </div>
+    </div>
+</div>

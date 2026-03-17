@@ -1,26 +1,11 @@
-﻿using System.Text.Json;
+﻿using Microsoft.Extensions.Options;
+using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Options;
 
 namespace MarketPortfolioAnalytics.Services
 {
     /// <summary>
     /// Service d'accès à l'API Financial Modeling Prep (FMP).
-    ///
-    /// Endpoints utilisés :
-    ///
-    ///   1. GET /stable/profile?symbol=AAPL&apikey=...
-    ///      → Profil d'un actif : nom, devise, place de cotation, secteur, ISIN.
-    ///
-    ///   2. GET /api/v3/historical-price-full/{symbol}?from=...&to=...&apikey=...
-    ///      → Prix historiques journaliers OHLCV.
-    ///      → Stratégie multi-URLs avec filtrage local de date pour compatibilité plan gratuit.
-    ///
-    ///   3. GET /stable/company-notes?symbol=T&apikey=...
-    ///      → Informations sur les obligations (CouponRate, MaturityDate).
-    ///
-    ///   4. GET /api/v3/quote/{PAIR}?apikey=...
-    ///      → Taux de change spot (ex : EURUSD, USDEUR) pour conversion de devises.
     /// </summary>
     public class FmpService
     {
@@ -76,10 +61,7 @@ namespace MarketPortfolioAnalytics.Services
                     Isin: string.IsNullOrWhiteSpace(isin) ? null : isin.Trim()
                 );
             }
-            catch (JsonException)
-            {
-                return null;
-            }
+            catch (JsonException) { return null; }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -95,17 +77,10 @@ namespace MarketPortfolioAnalytics.Services
 
             var urls = new[]
             {
-                $"{_opt.BaseUrl}/stable/historical-price-eod/light" +
-                    $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
-
-                $"{_opt.BaseUrl}/stable/historical-prices" +
-                    $"?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
-
-                $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}" +
-                    $"?from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
-
-                $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}" +
-                    $"?apikey={_opt.ApiKey}",
+                $"{_opt.BaseUrl}/stable/historical-price-eod/light?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
+                $"{_opt.BaseUrl}/stable/historical-prices?symbol={symbol}&from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
+                $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}?from={fromStr}&to={toStr}&apikey={_opt.ApiKey}",
+                $"{_opt.BaseUrl}/api/v3/historical-price-full/{symbol}?apikey={_opt.ApiKey}",
             };
 
             foreach (var url in urls)
@@ -114,7 +89,6 @@ namespace MarketPortfolioAnalytics.Services
                 if (json is null) continue;
 
                 var parsed = ParseHistoricalPrices(json);
-
                 var inRange = parsed
                     .Where(p => p.Date >= from.Date && p.Date <= to.Date)
                     .ToList();
@@ -152,29 +126,21 @@ namespace MarketPortfolioAnalytics.Services
                     {
                         pricesArray = innerHist;
                     }
-                    else
-                    {
-                        return new List<FmpHistoricalPrice>();
-                    }
+                    else return new List<FmpHistoricalPrice>();
                 }
-                else
-                {
-                    return new List<FmpHistoricalPrice>();
-                }
+                else return new List<FmpHistoricalPrice>();
 
                 var prices = new List<FmpHistoricalPrice>();
 
                 foreach (var item in pricesArray.EnumerateArray())
                 {
                     string? dateStr = ReadString(item, "date");
-                    if (!DateTime.TryParse(dateStr, out var date))
-                        continue;
+                    if (!DateTime.TryParse(dateStr, out var date)) continue;
 
                     decimal close = 0;
                     bool closeFound = false;
 
-                    string[] priceKeys = { "price", "close", "adjClose", "Close", "AdjClose", "Price" };
-                    foreach (var key in priceKeys)
+                    foreach (var key in new[] { "price", "close", "adjClose", "Close", "AdjClose", "Price" })
                     {
                         if (!item.TryGetProperty(key, out var priceEl)) continue;
 
@@ -186,13 +152,12 @@ namespace MarketPortfolioAnalytics.Services
                         }
                         else if (priceEl.ValueKind == JsonValueKind.String)
                         {
-                            string? s = priceEl.GetString();
-                            if (decimal.TryParse(s,
+                            if (decimal.TryParse(priceEl.GetString(),
                                 System.Globalization.NumberStyles.Number,
                                 System.Globalization.CultureInfo.InvariantCulture,
-                                out var parsed))
+                                out var p))
                             {
-                                close = parsed;
+                                close = p;
                                 closeFound = true;
                                 break;
                             }
@@ -201,27 +166,19 @@ namespace MarketPortfolioAnalytics.Services
 
                     if (!closeFound || close <= 0) continue;
 
-                    decimal? open = ReadDecimal(item, "open");
-                    decimal? high = ReadDecimal(item, "high");
-                    decimal? low = ReadDecimal(item, "low");
-                    long? volume = ReadLong(item, "volume");
-
                     prices.Add(new FmpHistoricalPrice(
                         Date: date.Date,
-                        Open: open,
-                        High: high,
-                        Low: low,
+                        Open: ReadDecimal(item, "open"),
+                        High: ReadDecimal(item, "high"),
+                        Low: ReadDecimal(item, "low"),
                         Close: close,
-                        Volume: volume
+                        Volume: ReadLong(item, "volume")
                     ));
                 }
 
                 return prices;
             }
-            catch (JsonException)
-            {
-                return new List<FmpHistoricalPrice>();
-            }
+            catch (JsonException) { return new List<FmpHistoricalPrice>(); }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -249,12 +206,8 @@ namespace MarketPortfolioAnalytics.Services
                 {
                     string? title = ReadString(item, "title");
                     if (string.IsNullOrWhiteSpace(title)) continue;
-
                     if (title.Contains('%') && Regex.IsMatch(title, @"\b20\d{2}\b"))
-                    {
-                        bestTitle = title;
-                        break;
-                    }
+                    { bestTitle = title; break; }
                     bestTitle ??= title;
                 }
 
@@ -263,58 +216,93 @@ namespace MarketPortfolioAnalytics.Services
                 decimal? couponRate = ParseCouponRate(bestTitle);
                 DateTime? maturityDate = ParseMaturityDate(bestTitle);
 
-                if (couponRate is null && maturityDate is null)
-                    return null;
-
-                return new FmpBondInfo(couponRate, maturityDate);
+                return couponRate is null && maturityDate is null
+                    ? null
+                    : new FmpBondInfo(couponRate, maturityDate);
             }
-            catch (JsonException)
-            {
-                return null;
-            }
+            catch (JsonException) { return null; }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // ENDPOINT 4 — Taux de change spot (NOUVEAU)
-        //
-        // Convertit 1 unité de `fromCurrency` en `toCurrency`.
-        // Ex : GetExchangeRateAsync("USD", "EUR") → ~0.926
-        //
-        // Stratégie :
-        //   1. Essaie la paire directe (ex : USDEUR) sur v3/quote et stable/quote
-        //   2. Si non trouvée, essaie la paire inverse (ex : EURUSD) et retourne 1/rate
-        //   3. Fallback : retourne 1.0 (pas de conversion — valeurs restent en devise source)
-        //
-        // Note : FMP supporte mieux EURUSD que USDEUR sur le plan gratuit.
-        // La stratégie inverse garantit qu'on trouve toujours le taux.
+        // ENDPOINT 4 — Prix temps réel d'un actif  ✅ DANS LA CLASSE
         // ═══════════════════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// Retourne le prix actuel d'un actif via FMP.
+        /// Appelé par AssetsController.GetPrice().
+        /// ✅ Utilise _opt (pas _options) — champ correct de cette classe.
+        /// ✅ Pas de _logger — FmpService n'en a pas.
+        /// </summary>
+        public async Task<decimal?> GetLatestPriceAsync(string ticker)
+        {
+            string symbol = ticker.Trim().ToUpper();
+
+            // Essai 1 : stable/quote
+            var urls = new[]
+            {
+                $"{_opt.BaseUrl}/stable/quote?symbol={symbol}&apikey={_opt.ApiKey}",
+                $"{_opt.BaseUrl}/api/v3/quote/{symbol}?apikey={_opt.ApiKey}",
+            };
+
+            foreach (var url in urls)
+            {
+                string? json = await GetJsonAsync(url);
+                if (json is null) continue;
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array
+                        && doc.RootElement.GetArrayLength() > 0)
+                    {
+                        var first = doc.RootElement[0];
+                        foreach (var key in new[] { "price", "previousClose" })
+                        {
+                            if (first.TryGetProperty(key, out var el)
+                                && el.ValueKind == JsonValueKind.Number)
+                            {
+                                decimal v = el.GetDecimal();
+                                if (v > 0) return v;
+                            }
+                        }
+                    }
+                }
+                catch (JsonException) { }
+            }
+
+            return null;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENDPOINT 5 — Taux de change spot  ✅ DANS LA CLASSE
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Retourne le taux de change entre deux devises.
+        /// Ex : GetExchangeRateAsync("EUR","USD") → ~1.086
+        /// ✅ Utilise _opt (pas _options) — champ correct de cette classe.
+        /// ✅ Pas de _logger — FmpService n'en a pas.
+        /// </summary>
         public async Task<decimal> GetExchangeRateAsync(string fromCurrency, string toCurrency)
         {
-            // Pas de conversion nécessaire
             if (string.Equals(fromCurrency, toCurrency, StringComparison.OrdinalIgnoreCase))
                 return 1m;
 
             string from = fromCurrency.Trim().ToUpper();
             string to = toCurrency.Trim().ToUpper();
 
-            // ── Essai paire directe (ex : USDEUR) ─────────────────────────────
+            // Paire directe (ex : EURUSD)
             decimal rate = await FetchForexRateAsync($"{from}{to}");
             if (rate > 0m) return rate;
 
-            // ── Essai paire inverse (ex : EURUSD → 1 / EURUSD) ────────────────
-            decimal inverseRate = await FetchForexRateAsync($"{to}{from}");
-            if (inverseRate > 0m) return 1m / inverseRate;
+            // Paire inverse (ex : USDEUR → 1/USDEUR)
+            decimal inverse = await FetchForexRateAsync($"{to}{from}");
+            if (inverse > 0m) return 1m / inverse;
 
-            // ── Fallback : pas de conversion (taux 1:1) ────────────────────────
-            // Les valeurs restent dans leur devise source plutôt que de retourner 0.
-            return 1m;
+            return 1m; // Fallback neutre
         }
 
-        /// <summary>
-        /// Interroge FMP pour obtenir le prix spot d'une paire forex (ex : EURUSD).
-        /// Retourne 0 si la paire est introuvable ou en cas d'erreur.
-        /// </summary>
         private async Task<decimal> FetchForexRateAsync(string pair)
         {
             var urls = new[]
@@ -337,15 +325,12 @@ namespace MarketPortfolioAnalytics.Services
                         continue;
 
                     var item = doc.RootElement[0];
-
-                    // Essaie les champs de prix dans l'ordre de préférence
                     foreach (var key in new[] { "price", "previousClose", "ask", "bid" })
                     {
                         if (!item.TryGetProperty(key, out var el)) continue;
                         if (el.ValueKind != JsonValueKind.Number) continue;
-
-                        decimal val = el.GetDecimal();
-                        if (val > 0m) return val;
+                        decimal v = el.GetDecimal();
+                        if (v > 0m) return v;
                     }
                 }
                 catch (JsonException) { }
@@ -363,73 +348,57 @@ namespace MarketPortfolioAnalytics.Services
             try
             {
                 var response = await _http.GetAsync(url);
-                if (!response.IsSuccessStatusCode)
-                    return null;
+                if (!response.IsSuccessStatusCode) return null;
                 return await response.Content.ReadAsStringAsync();
             }
-            catch (HttpRequestException)
-            {
-                return null;
-            }
+            catch (HttpRequestException) { return null; }
         }
 
         private static string? ReadString(JsonElement el, string property)
         {
-            if (el.TryGetProperty(property, out var prop)
-                && prop.ValueKind == JsonValueKind.String)
-                return prop.GetString();
-            return null;
+            return el.TryGetProperty(property, out var prop)
+                && prop.ValueKind == JsonValueKind.String
+                ? prop.GetString()
+                : null;
         }
 
         private static decimal? ReadDecimal(JsonElement el, string property)
         {
-            if (el.TryGetProperty(property, out var prop)
-                && prop.ValueKind == JsonValueKind.Number)
-                return prop.GetDecimal();
-            return null;
+            return el.TryGetProperty(property, out var prop)
+                && prop.ValueKind == JsonValueKind.Number
+                ? prop.GetDecimal()
+                : null;
         }
 
         private static long? ReadLong(JsonElement el, string property)
         {
-            if (el.TryGetProperty(property, out var prop)
-                && prop.ValueKind == JsonValueKind.Number)
-                return prop.GetInt64();
-            return null;
+            return el.TryGetProperty(property, out var prop)
+                && prop.ValueKind == JsonValueKind.Number
+                ? prop.GetInt64()
+                : null;
         }
 
         private static decimal? ParseCouponRate(string text)
         {
-            var match = Regex.Match(text,
-                @"(?<!\d)(\d{1,2}(\.\d{1,4})?)\s*%",
-                RegexOptions.IgnoreCase);
-
+            var match = Regex.Match(text, @"(?<!\d)(\d{1,2}(\.\d{1,4})?)\s*%", RegexOptions.IgnoreCase);
             if (!match.Success) return null;
-
-            if (decimal.TryParse(
-                match.Groups[1].Value,
+            return decimal.TryParse(match.Groups[1].Value,
                 System.Globalization.NumberStyles.Number,
                 System.Globalization.CultureInfo.InvariantCulture,
-                out decimal rate))
-                return rate;
-
-            return null;
+                out decimal rate) ? rate : null;
         }
 
         private static DateTime? ParseMaturityDate(string text)
         {
             var iso = Regex.Match(text, @"\b(20\d{2})-(\d{2})-(\d{2})\b");
-            if (iso.Success && DateTime.TryParse(iso.Value, out var d1))
-                return d1.Date;
+            if (iso.Success && DateTime.TryParse(iso.Value, out var d1)) return d1.Date;
 
             var literal = Regex.Match(text,
                 @"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}\b",
                 RegexOptions.IgnoreCase);
-
-            if (literal.Success && DateTime.TryParse(
-                literal.Value,
+            if (literal.Success && DateTime.TryParse(literal.Value,
                 System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None,
-                out var d2))
+                System.Globalization.DateTimeStyles.None, out var d2))
                 return d2.Date;
 
             var yearOnly = Regex.Match(text, @"\b(20\d{2})\b");
@@ -438,10 +407,11 @@ namespace MarketPortfolioAnalytics.Services
 
             return null;
         }
-    }
+
+    } // ← FIN de la classe FmpService
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // RECORDS
+    // RECORDS — EN DEHORS de la classe, dans le même namespace  ✅
     // ═══════════════════════════════════════════════════════════════════════════
 
     public record FmpProfile(

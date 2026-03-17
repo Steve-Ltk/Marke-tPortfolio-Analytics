@@ -1,5 +1,106 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AnalyticsIndexViewModel
+
+<div style="display:grid;grid-template-columns:1fr 2fr;gap:14px">
+
+    <!-- Sélection + paramètres -->
+    <div class="card">
+        <div class="card-header"><div class="card-title">Comparer des portefeuilles</div></div>
+        <p style="font-size:13px;color:var(--t4);margin-bottom:16px">
+            Sélectionnez au moins 2 portefeuilles pour les comparer sur la même période.
+        </p>
+
+        @if (!Model.Portfolios.Any())
+        {
+            <div style="color:var(--t4);font-size:13px;text-align:center;padding:20px">
+                Aucun portefeuille disponible.
+            </div>
+        }
+        else
+        {
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+                @foreach (var p in Model.Portfolios)
+                {
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;
+                                          padding:10px 14px;border:1px solid var(--border);
+                                          border-radius:var(--radius-md);transition:all .15s">
+                        <input type="checkbox" class="cmp-check" value="@p.Id"
+                               style="accent-color:var(--green);width:16px;height:16px" />
+                        <span style="font-weight:600;font-size:13px">@p.Name</span>
+                    </label>
+                }
+            </div>
+        }
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div class="field" style="margin-bottom:0">
+                <label>Depuis</label>
+                <input type="date" id="cmp-debut" class="form-control"
+                       value="@Model.DateDebut.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label>Jusqu'au</label>
+                <input type="date" id="cmp-fin" class="form-control"
+                       value="@Model.DateFin.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+
+        <button id="btn-cmp" class="btn btn-green btn-full btn-lg">
+            ⚖️ Comparer
+        </button>
+    </div>
+
+    <!-- Résultats -->
+    <div>
+        <!-- Spinner -->
+        <div id="cmp-spinner" class="card" style="display:none;align-items:center;
+             justify-content:center;min-height:240px">
+            <div style="text-align:center;color:var(--t4)">
+                <div style="font-size:36px;margin-bottom:12px">⏳</div>
+                <div style="font-weight:600">Comparaison en cours…</div>
+            </div>
+        </div>
+
+        <!-- Résultats -->
+        <div id="cmp-result" style="display:none">
+            <div class="card">
+                <div class="card-header"><div class="card-title">Tableau comparatif</div></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Portefeuille</th>
+                                <th>Rend. annualisé</th>
+                                <th>Volatilité</th>
+                                <th>Sharpe</th>
+                                <th>Max Drawdown</th>
+                                <th>Rend. total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cmp-tbody">
+                            <!-- Injecté par analytics.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- État initial -->
+        <div id="cmp-placeholder" class="card" style="text-align:center;padding:60px 0;color:var(--t4)">
+            <div style="font-size:32px;margin-bottom:12px">⚖️</div>
+            <div style="font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px">
+                Sélectionnez vos portefeuilles
+            </div>
+            <div style="font-size:12px">
+                Cochez au moins 2 portefeuilles à gauche et lancez la comparaison.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Masquer le placeholder quand des résultats arrivent
+    document.getElementById('cmp-result') && document.getElementById('cmp-result').addEventListener('DOMSubtreeModified', function() {
+        var p = document.getElementById('cmp-placeholder');
+        if (p) p.style.display = 'none';
+    });
+</script>

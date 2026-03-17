@@ -1,5 +1,148 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AssetDetailsViewModel
 @{
+    Layout = "_Layout";
+    ViewData["Title"] = Model.Asset.Ticker + " — " + Model.Asset.Name;
+    ViewData["Section"] = "Marché";
 }
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;gap:16px">
+        <div style="width:48px;height:48px;background:var(--dark-4);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:Sora,sans-serif;font-weight:800;font-size:14px">
+            @Model.Asset.Ticker.Substring(0, Math.Min(2, Model.Asset.Ticker.Length))
+        </div>
+        <div>
+            <div class="page-title">@Model.Asset.Ticker</div>
+            <div class="page-sub">
+                @Model.Asset.Name ·
+                <span class="badge @(Model.TypeLabel == "Bond" ? "badge-purple" : "badge-blue")">@Model.TypeLabel</span>
+                @if (!string.IsNullOrEmpty(Model.Asset.Exchange))
+                {
+                    <span style="margin-left:6px;font-size:12px;color:var(--t4)">@Model.Asset.Exchange</span>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="header-actions">
+        <a href="/Assets" class="btn btn-ghost">← Marché</a>
+    </div>
+</div>
+
+<!-- Prix KPIs -->
+<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+    <div class="kpi" style="--accent:var(--green)">
+        <div class="kpi-label">Prix actuel (@(Model.Asset.Currency ?? "USD"))</div>
+        <div class="kpi-val green">@Model.Asset.Currency @Model.PrixActuel.ToString("N2")</div>
+        @if (Model.VariationJour != 0)
+        {
+            <div class="kpi-delta @(Model.VariationJour >= 0 ? "up" : "dn")">
+                @Model.VariationSigne @Math.Abs(Model.VariationJour).ToString("F2")% aujourd'hui
+            </div>
+        }
+    </div>
+    <div class="kpi" style="--accent:var(--blue)">
+        <div class="kpi-label">Valeur en EUR</div>
+        <div class="kpi-val">€@Model.PrixEur.ToString("N2")</div>
+        <div class="kpi-sub">Taux EUR/USD : @Model.TauxEurUsd.ToString("F4")</div>
+    </div>
+    <div class="kpi" style="--accent:var(--amber)">
+        <div class="kpi-label">Valeur en USD</div>
+        <div class="kpi-val">$@Model.PrixUsd.ToString("N2")</div>
+        <div class="kpi-sub">Conversion automatique</div>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+
+    <!-- Infos actif -->
+    <div class="card">
+        <div class="card-header"><div class="card-title">Informations</div></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+            <div style="padding:12px 0;border-bottom:1px solid var(--border-2)">
+                <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Ticker</div>
+                <div style="font-family:Sora,sans-serif;font-weight:700">@Model.Asset.Ticker</div>
+            </div>
+            <div style="padding:12px 0;border-bottom:1px solid var(--border-2);padding-left:16px">
+                <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Type</div>
+                <div><span class="badge @(Model.TypeLabel == "Bond" ? "badge-purple" : "badge-blue")">@Model.TypeLabel</span></div>
+            </div>
+            <div style="padding:12px 0;border-bottom:1px solid var(--border-2)">
+                <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Devise</div>
+                <div style="font-weight:600">@(Model.Asset.Currency ?? "—")</div>
+            </div>
+            <div style="padding:12px 0;border-bottom:1px solid var(--border-2);padding-left:16px">
+                <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Marché</div>
+                <div style="font-weight:600">@(string.IsNullOrEmpty(Model.Asset.Exchange) ? "—" : Model.Asset.Exchange)</div>
+            </div>
+
+            @{
+                var stock = Model.Asset as MarketPortfolioAnalytics.Models.Stock;
+                var bond = Model.Asset as MarketPortfolioAnalytics.Models.Bond;
+            }
+
+            @if (stock != null)
+            {
+                <div style="padding:12px 0;border-bottom:1px solid var(--border-2)">
+                    <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Secteur</div>
+                    <div style="font-weight:600">@(string.IsNullOrEmpty(stock.Sector) ? "—" : stock.Sector)</div>
+                </div>
+                <div style="padding:12px 0;border-bottom:1px solid var(--border-2);padding-left:16px">
+                    <div style="font-size:11px;color:var(--t4);margin-bottom:3px">ISIN</div>
+                    <div style="font-weight:600;font-size:12px">@(string.IsNullOrEmpty(stock.ISIN) ? "—" : stock.ISIN)</div>
+                </div>
+            }
+
+            @if (bond != null)
+            {
+                <div style="padding:12px 0;border-bottom:1px solid var(--border-2)">
+                    <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Taux coupon</div>
+                    <div style="font-weight:600;color:var(--green)">@(bond.CouponRate != null ? bond.CouponRate.Value.ToString("F2") + "%" : "—")</div>
+                </div>
+                <div style="padding:12px 0;border-bottom:1px solid var(--border-2);padding-left:16px">
+                    <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Maturité</div>
+                    <div style="font-weight:600">@(bond.MaturityDate != null ? bond.MaturityDate.Value.ToString("dd/MM/yyyy") : "—")</div>
+                </div>
+            }
+
+            <div style="padding:12px 0">
+                <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Ajouté le</div>
+                <div style="font-weight:600">@Model.Asset.CreatedAt.ToString("dd/MM/yyyy")</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions rapides -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card">
+            <div class="card-header"><div class="card-title">Ajouter à un portefeuille</div></div>
+
+            @if (Model.EstDansPortefeuille)
+            {
+                <div class="insight-box" style="margin-bottom:14px">
+                    <strong>✓ Déjà détenu dans</strong><br>
+                    @foreach (var p in Model.PortefeuillesDetenant)
+                    {
+                        <div style="font-size:12px;margin-top:4px">· @p</div>
+                    }
+                </div>
+            }
+
+            <a href="/Portfolios" class="btn btn-green btn-full" style="height:42px;font-size:13px">
+                Voir mes portefeuilles →
+            </a>
+            <div style="font-size:11.5px;color:var(--t4);margin-top:10px;text-align:center;line-height:1.5">
+                Accédez à un portefeuille et cliquez<br>« + Position » pour ajouter @Model.Asset.Ticker
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><div class="card-title">Analytics</div></div>
+            <p style="font-size:13px;color:var(--t4);margin-bottom:14px">
+                Analysez les performances de cet actif dans vos portefeuilles.
+            </p>
+            <a href="/Analytics" class="btn btn-ghost btn-full" style="height:40px;font-size:13px">
+                Ouvrir Analytics →
+            </a>
+        </div>
+    </div>
+</div>

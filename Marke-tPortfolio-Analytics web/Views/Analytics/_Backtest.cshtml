@@ -1,5 +1,100 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AnalyticsIndexViewModel
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- Paramètres -->
+    <div class="card">
+        <div class="card-header"><div class="card-title">Backtest historique</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="field">
+                <label>Date début</label>
+                <input type="date" id="bt-debut" class="form-control"
+                       value="@Model.DateDebut.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="field">
+                <label>Date fin</label>
+                <input type="date" id="bt-fin" class="form-control"
+                       value="@Model.DateFin.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+        <div class="field">
+            <label>Benchmark</label>
+            <select id="bt-bench" class="form-control">
+                <option value="SPY">S&amp;P 500 (SPY)</option>
+                <option value="QQQ">NASDAQ 100 (QQQ)</option>
+                <option value="EWQ">CAC 40 (EWQ)</option>
+                <option value="URTH">MSCI World (URTH)</option>
+            </select>
+        </div>
+        <button id="btn-bt" class="btn btn-green btn-full btn-lg">
+            📈 Lancer le backtest
+        </button>
+        <div class="insight-box" style="margin-top:16px;font-size:12px">
+            Reconstitue les performances historiques avec les prix réels de chaque actif.
+            Compare votre portefeuille au benchmark sélectionné.
+        </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="bt-spinner" class="card" style="display:none;align-items:center;
+         justify-content:center;min-height:240px">
+        <div style="text-align:center;color:var(--t4)">
+            <div style="font-size:36px;margin-bottom:12px">⏳</div>
+            <div style="font-weight:600">Backtest en cours…</div>
+            <div style="font-size:12px;margin-top:6px">Reconstitution des prix historiques</div>
+        </div>
+    </div>
+
+    <!-- Résultats -->
+    <div id="bt-result" style="display:none"></div>
+</div>
+
+<!-- Résultats détaillés (pleine largeur) -->
+<div id="bt-result" style="display:none;margin-top:14px">
+    <div class="card" style="margin-bottom:14px">
+        <div class="card-header"><div class="card-title">Métriques vs Benchmark</div></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Portefeuille</div>
+                <div id="bt-port-ret" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px">—</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Benchmark</div>
+                <div id="bt-bench-ret" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px;color:var(--blue)">—</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Alpha</div>
+                <div id="bt-alpha" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px">—</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Beta</div>
+                <div id="bt-beta" style="font-family:Sora,sans-serif;font-weight:800;font-size:20px">—</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+            <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Sharpe</div>
+                <div id="bt-sharpe" style="font-family:Sora,sans-serif;font-weight:700;font-size:16px">—</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Sortino</div>
+                <div id="bt-sortino" style="font-family:Sora,sans-serif;font-weight:700;font-size:16px">—</div>
+            </div>
+            <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Max Drawdown</div>
+                <div id="bt-drawdown" style="font-family:Sora,sans-serif;font-weight:700;font-size:16px;color:var(--red)">—</div>
+            </div>
+        </div>
+
+        <!-- Graphique performance -->
+        <canvas id="bt-chart" height="200" style="margin-bottom:16px"></canvas>
+
+        <!-- Heatmap mensuelle -->
+        <div class="card-header" style="margin-bottom:10px">
+            <div class="card-title" style="font-size:13px">Rendements mensuels</div>
+        </div>
+        <div style="overflow-x:auto">
+            <canvas id="bt-heatmap"></canvas>
+        </div>
+    </div>
+</div>

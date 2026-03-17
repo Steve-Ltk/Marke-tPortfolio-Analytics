@@ -1,5 +1,93 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AnalyticsIndexViewModel
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- Panneau paramètres -->
+    <div class="card">
+        <div class="card-header"><div class="card-title">Simulation Monte Carlo</div></div>
+        <div class="field">
+            <label>Nombre de simulations</label>
+            <select id="mc-nb" class="form-control">
+                <option value="500">500 (rapide)</option>
+                <option value="1000" selected>1 000 (recommandé)</option>
+                <option value="5000">5 000 (précis)</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Horizon (jours de bourse)</label>
+            <select id="mc-horizon" class="form-control">
+                <option value="63">3 mois (63 j)</option>
+                <option value="126">6 mois (126 j)</option>
+                <option value="252" selected>1 an (252 j)</option>
+                <option value="756">3 ans (756 j)</option>
+                <option value="1260">5 ans (1 260 j)</option>
+            </select>
+        </div>
+        <button id="btn-mc" class="btn btn-green btn-full btn-lg">
+            🔮 Lancer la simulation
+        </button>
+        <div class="insight-box" style="margin-top:16px;font-size:12px">
+            Génère des milliers de trajectoires via mouvement brownien géométrique (GBM)
+            calibré sur l'historique réel du portefeuille.
+        </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="mc-spinner" class="card" style="display:none;align-items:center;
+         justify-content:center;min-height:240px">
+        <div style="text-align:center;color:var(--t4)">
+            <div style="font-size:36px;margin-bottom:12px">⏳</div>
+            <div style="font-weight:600">Simulation en cours…</div>
+            <div style="font-size:12px;margin-top:6px">Génération des trajectoires GBM</div>
+        </div>
+    </div>
+
+    <!-- Résultats -->
+    <div id="mc-result" style="display:none">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Résultats Monte Carlo</div>
+                    <div class="card-sub">
+                        <span id="mc-horizon-label"></span> ·
+                        <span id="mc-sims-label"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Métriques principales -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+                <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:4px">Prob. de gain</div>
+                    <div id="mc-prob" style="font-family:Sora,sans-serif;font-weight:800;font-size:22px">—</div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:4px">VaR 95%</div>
+                    <div id="mc-var95" style="font-family:Sora,sans-serif;font-weight:800;font-size:22px;color:var(--red)">—</div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:4px">Médiane finale</div>
+                    <div id="mc-median" style="font-family:Sora,sans-serif;font-weight:800;font-size:22px;color:var(--green)">—</div>
+                </div>
+            </div>
+
+            <!-- P5 / P95 -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+                <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">P5 — Pessimiste</div>
+                    <div id="mc-p5" style="font-family:Sora,sans-serif;font-weight:700;font-size:16px;color:var(--t3)">—</div>
+                </div>
+                <div style="background:var(--dark-4);border-radius:10px;padding:12px;text-align:center">
+                    <div style="font-size:10px;color:var(--t4);margin-bottom:3px">P95 — Optimiste</div>
+                    <div id="mc-p95" style="font-family:Sora,sans-serif;font-weight:700;font-size:16px;color:var(--green)">—</div>
+                </div>
+            </div>
+
+            <!-- Insight expert -->
+            <div id="mc-insight" class="insight-box" style="margin-bottom:14px"></div>
+
+            <!-- Fan chart -->
+            <canvas id="mc-chart" height="180"></canvas>
+        </div>
+    </div>
+</div>
