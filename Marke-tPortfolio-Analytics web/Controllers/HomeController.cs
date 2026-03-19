@@ -15,8 +15,12 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
 
         public IActionResult Index()
         {
-            return View();
+            if (HttpContext.Session.GetInt32("UserId") != null)
+                return RedirectToAction("Index", "Dashboard");
+
+            return RedirectToAction("Login", "Auth");
         }
+
 
         public IActionResult Privacy()
         {

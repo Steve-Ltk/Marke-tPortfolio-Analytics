@@ -16,8 +16,8 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         public async Task<IActionResult> Create(int portfolioId)
         {
             var portfolio = await ApiService.GetPortfolioByIdAsync(portfolioId);
-            if (portfolio == null || portfolio.UserId != GetUserId())
-                return NotFound();
+            if (portfolio == null)
+                return RedirectToAction("Index", "Portfolios");
 
             var assets = await ApiService.GetAllAssetsAsync();
 

@@ -60,8 +60,8 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         public async Task<IActionResult> Details(int id)
         {
             var portfolio = await ApiService.GetPortfolioByIdAsync(id);
-            if (portfolio == null || portfolio.UserId != GetUserId())
-                return NotFound();
+            if (portfolio == null)
+                return RedirectToAction("Index");
 
             var positions = await ApiService.GetPositionsByPortfolioAsync(id);
             var taux = await ApiService.GetExchangeRateAsync("EUR", "USD");

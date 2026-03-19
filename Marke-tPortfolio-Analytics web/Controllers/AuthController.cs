@@ -117,9 +117,9 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 user.Email
             );
 
-            TempData["SuccessMessage"] = $"Bienvenue sur MPA, {user.FullName} !";
+            TempData["SuccessMessage"] = $"Bienvenue sur catalis, {user.FullName} ! Définissez votre premier objectif.";
 
-            return RedirectToAction("Index", "Dashboard");
+            return RedirectToAction("Wizard", "Goal", new { step = 1 });
         }
 
         // ════════════════════════════════════════════════════════════════════

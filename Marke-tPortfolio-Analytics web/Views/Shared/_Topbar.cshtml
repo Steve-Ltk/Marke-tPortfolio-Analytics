@@ -20,7 +20,11 @@
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.35-4.35" />
             </svg>
-            <input placeholder="Rechercher ticker, portefeuille…" />
+            <form method="get" action="/Assets">
+                <input name="q" placeholder="Rechercher ticker, portefeuille"
+                       style="background:none;border:none;outline:none;color:inherit;width:100%"
+                       autocomplete="off" />
+            </form>
         </div>
         <div class="topbar-realtime"><div class="rt-dot"></div>Live</div>
         <a href="/Profile" class="topbar-avatar">

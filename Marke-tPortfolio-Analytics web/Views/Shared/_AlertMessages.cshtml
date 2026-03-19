@@ -1,4 +1,11 @@
-﻿@if (TempData["SuccessMessage"] != null)
+﻿@if (TempData["WelcomeMessage"] != null)
+{
+    <div class="mpa-alert mpa-alert-success" style="margin:0 36px 16px">
+        🎉 @TempData["WelcomeMessage"]
+        <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">×</button>
+    </div>
+}
+@if (TempData["SuccessMessage"] != null)
 {
     <div class="mpa-alert mpa-alert-success" style="margin:0 36px 16px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12" /></svg>
