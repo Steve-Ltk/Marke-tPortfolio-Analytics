@@ -101,8 +101,36 @@ namespace Marke_tPortfolio_Analytics_web.Services
         public Task<bool> UpdateUserAsync(int id, string fullName, string email)
             => PutAsync($"api/AppUsers/{id}", new { id, fullName, email });
 
-        public Task<bool> ChangePasswordAsync(int id, string currentPassword, string newPassword)
-            => PatchStringAsync($"api/AppUsers/{id}/password", newPassword);
+        public async Task<bool> ChangePasswordAsync(int id, string currentPassword, string newPassword)
+        {
+            try
+            {
+                var body = new { currentPassword, newPassword };
+                var content = new StringContent(
+                    JsonSerializer.Serialize(body, _json),
+                    System.Text.Encoding.UTF8,
+                    "application/json");
+
+                var req = new HttpRequestMessage(HttpMethod.Patch,
+                    $"api/AppUsers/{id}/password")
+                {
+                    Content = content
+                };
+
+                var response = await Client().SendAsync(req);
+
+                // 401 = mot de passe actuel incorrect (à distinguer d'une erreur serveur)
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    return false;
+
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ChangePassword user {Id}", id);
+                return false;
+            }
+        }
 
         // ══════════════════════════════════════════════════════════════════════
         // PORTEFEUILLES

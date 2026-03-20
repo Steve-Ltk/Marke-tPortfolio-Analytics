@@ -60,8 +60,13 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         public async Task<IActionResult> Details(int id)
         {
             var portfolio = await ApiService.GetPortfolioByIdAsync(id);
+
+            // ✅ FIX : vérification d'ownership — empêche l'accès aux portefeuilles d'autres users
             if (portfolio == null)
                 return RedirectToAction("Index");
+
+            if (portfolio.UserId != GetUserId())
+                return NotFound();
 
             var positions = await ApiService.GetPositionsByPortfolioAsync(id);
             var taux = await ApiService.GetExchangeRateAsync("EUR", "USD");
@@ -123,7 +128,6 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         {
             if (!ModelState.IsValid) return View(model);
 
-            // ✅ CreatePortfolioAsync(name, currency, userId) — sans Description
             var created = await ApiService.CreatePortfolioAsync(
                 model.Name, model.Currency, GetUserId() ?? 0);
 
@@ -150,7 +154,6 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 Id = p.Id,
                 Name = p.Name,
                 Currency = p.Currency
-                // ✅ Pas de Description — Portfolio n'a pas ce champ
             });
         }
 
@@ -162,7 +165,6 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             var p = await ApiService.GetPortfolioByIdAsync(model.Id);
             if (p == null || p.UserId != GetUserId()) return NotFound();
 
-            // ✅ UpdatePortfolioAsync(id, name, currency) — sans Description ni userId
             if (!await ApiService.UpdatePortfolioAsync(model.Id, model.Name, model.Currency))
             {
                 ModelState.AddModelError(string.Empty, "Erreur lors de la mise à jour.");

@@ -105,9 +105,12 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                     Couleur = DonutColors[i % DonutColors.Length]
                 }).ToList();
 
-            vm.SharpeRatio = CalculerSharpe(allPositions);
-            vm.MaxDrawdown = -14.2m;
+            // ── FIX : Sharpe et MaxDrawdown réels depuis le backend ───────────
+            // On analyse chaque portefeuille sur 1 an et on calcule
+            // une moyenne pondérée par valeur de marché.
+            await ChargerMetriquesAnalytiques(vm, portfolios, valeurTotale);
 
+            // ── Score investisseur ────────────────────────────────────────────
             int score = 20;
             var pills = new List<string>();
 
@@ -155,12 +158,71 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return View(vm);
         }
 
-        private static decimal CalculerSharpe(List<PositionDashboard> positions)
+        // ── Sharpe et MaxDrawdown pondérés depuis le backend ──────────────────
+        // Pour chaque portefeuille, on appelle l'API Analytics sur 1 an.
+        // On pondère Sharpe et MaxDrawdown par la valeur de marché de chaque
+        // portefeuille, pour obtenir des métriques globales cohérentes.
+        //
+        // Si l'API ne retourne rien (pas assez d'historique), on affiche 0
+        // plutôt qu'une valeur inventée.
+        private async Task ChargerMetriquesAnalytiques(
+            DashboardViewModel vm,
+            List<MarketPortfolioAnalytics.Models.Portfolio> portfolios,
+            decimal valeurTotale)
         {
-            if (!positions.Any()) return 0;
-            decimal rend = positions.Average(p => p.PnlPct);
-            if (rend <= 0) return 0;
-            return Math.Round((rend - 3.5m) / 18m, 2);
+            if (valeurTotale <= 0 || !portfolios.Any())
+            {
+                vm.SharpeRatio = 0;
+                vm.MaxDrawdown = 0;
+                return;
+            }
+
+            var dateFin = DateTime.UtcNow;
+            var dateDebut = dateFin.AddYears(-1);
+
+            double sharpeePondere = 0;
+            double maxDrawdownPondere = 0;
+            decimal valeurAnalysee = 0;
+
+            foreach (var portfolio in portfolios)
+            {
+                try
+                {
+                    var analyse = await ApiService.AnalyzePortfolioAsync(
+                        portfolio.Id, dateDebut, dateFin, riskFreeRate: 0.03);
+
+                    if (analyse == null) continue;
+
+                    // Valeur du portefeuille comme poids
+                    decimal poidsPortfolio = analyse.TotalCurrentValue;
+                    if (poidsPortfolio <= 0) continue;
+
+                    sharpeePondere += analyse.SharpeRatio * (double)poidsPortfolio;
+                    maxDrawdownPondere += analyse.MaxDrawdown * (double)poidsPortfolio;
+                    valeurAnalysee += poidsPortfolio;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex,
+                        "Impossible de charger les métriques analytiques pour le portefeuille {Id}",
+                        portfolio.Id);
+                }
+            }
+
+            if (valeurAnalysee > 0)
+            {
+                // Moyenne pondérée par valeur de marché
+                vm.SharpeRatio = Math.Round(
+                    (decimal)(sharpeePondere / (double)valeurAnalysee), 2);
+                vm.MaxDrawdown = Math.Round(
+                    (decimal)(maxDrawdownPondere / (double)valeurAnalysee), 2);
+            }
+            else
+            {
+                // Pas assez d'historique — on affiche 0 plutôt qu'une valeur inventée
+                vm.SharpeRatio = 0;
+                vm.MaxDrawdown = 0;
+            }
         }
     }
 }

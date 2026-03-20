@@ -187,13 +187,17 @@ namespace MarketPortfolioAnalytics.Controllers
         }
 
         [HttpPatch("{id}/password")]
-        public async Task<IActionResult> UpdatePassword(int id, [FromBody] string newPassword)
+        public async Task<IActionResult> UpdatePassword(
+     int id, [FromBody] ChangePasswordRequest req)
         {
-            if (string.IsNullOrWhiteSpace(newPassword))
-                return BadRequest("Le mot de passe est requis.");
+            if (string.IsNullOrWhiteSpace(req.CurrentPassword))
+                return BadRequest("Le mot de passe actuel est requis.");
 
-            if (newPassword.Length < 8)
-                return BadRequest("Le mot de passe doit contenir au moins 8 caractères.");
+            if (string.IsNullOrWhiteSpace(req.NewPassword))
+                return BadRequest("Le nouveau mot de passe est requis.");
+
+            if (req.NewPassword.Length < 8)
+                return BadRequest("Le nouveau mot de passe doit contenir au moins 8 caractères.");
 
             var user = await _context.AppUser.FindAsync(id);
 
@@ -203,8 +207,16 @@ namespace MarketPortfolioAnalytics.Controllers
             if (!user.IsActive)
                 return BadRequest("Impossible de modifier le mot de passe d'un utilisateur inactif.");
 
+            // ✅ Vérification du mot de passe actuel
             var hasher = new PasswordHasher<AppUser>();
-            user.PasswordHash = hasher.HashPassword(user, newPassword);
+            var verificationResult = hasher.VerifyHashedPassword(
+                user, user.PasswordHash, req.CurrentPassword);
+
+            if (verificationResult == PasswordVerificationResult.Failed)
+                return Unauthorized("Mot de passe actuel incorrect.");
+
+            // Mise à jour avec le nouveau mot de passe hashé
+            user.PasswordHash = hasher.HashPassword(user, req.NewPassword);
             user.PasswordUpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -297,4 +309,5 @@ namespace MarketPortfolioAnalytics.Controllers
 
     // <summary>Corps de la requête POST /api/AppUsers/login.</summary>
     public record LoginRequest(string Email, string Password);
+    public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 }

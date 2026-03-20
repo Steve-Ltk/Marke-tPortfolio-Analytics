@@ -24,6 +24,8 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         public int NbPortfolios => Portfolios.Count;
         public bool HasPortfolios => Portfolios.Any();
 
+        public bool HasMetriquesAnalytiques => SharpeRatio != 0 || MaxDrawdown != 0;
+
         public string ScoreCouleur => ScoreInvestisseur switch
         {
             < 40 => "var(--red)",

@@ -98,14 +98,22 @@
     </div>
     <div class="kpi" style="--accent:var(--amber)">
         <div class="kpi-label">Sharpe Ratio</div>
-        <div class="kpi-val @(Model.SharpeRatio > 1 ? "green" : Model.SharpeRatio > 0 ? "amber" : "red")">
-            @Model.SharpeRatio.ToString("F2")
-        </div>
-        <div class="kpi-delta" style="color:var(--t4)">
-            @(Model.SharpeRatio > 2 ? "Excellent" : Model.SharpeRatio > 1 ? "Bon" :
-                        Model.SharpeRatio > 0 ? "Insuffisant" : "Danger")
+        @if (Model.HasMetriquesAnalytiques)
+        {
+            <div class="kpi-val @(Model.SharpeRatio > 1 ? "green" : Model.SharpeRatio > 0 ? "amber" : "red")">
+                @Model.SharpeRatio.ToString("F2")
+            </div>
+            <div class="kpi-delta" style="color:var(--t4)">
+                @(Model.SharpeRatio > 2 ? "Excellent" : Model.SharpeRatio > 1 ? "Bon" :
+                            Model.SharpeRatio > 0 ? "Insuffisant" : "Danger")
         </div>
         <div class="kpi-sub">Seuil excellent : > 2</div>
+                }
+        else
+        {
+            <div class="kpi-val" style="color:var(--t4)">—</div>
+            <div class="kpi-sub">Historique insuffisant (moins d'1 an)</div>
+        }
     </div>
     <div class="kpi" style="--accent:var(--purple)">
         <div class="kpi-label">Score</div>
