@@ -33,6 +33,9 @@ builder.Services.AddScoped<PortfolioOptimizationService>();
 builder.Services.AddScoped<MonteCarloService>();
 builder.Services.AddScoped<BacktestService>();
 
+// Enregistre tous les controllers de l'API.
+// Sans ça, aucune route n'est reconnue → tout retourne 404.
+// Gère aussi la sérialisation JSON automatique et la validation des modèles.
 builder.Services.AddControllers();
 
 
@@ -65,7 +68,10 @@ app.UseAuthorization();
 app.MapControllers();
 
 //  Initialisation de la base de données 
-// EnsureCreated : crée les tables si la base n'existe pas encore.
+// CreateScope = crée un contexte d'exécution artificiel.
+// Nécessaire car on est au démarrage, hors requête HTTP.
+// Sans ça, impossible de récupérer un service Scoped comme DbContext.
+// Le "using" garantit que tout est détruit proprement à la fin du bloc.
 using (var scope = app.Services.GetRequiredService<IServiceScopeFactory>().CreateScope())
 {
     var context = scope.ServiceProvider
