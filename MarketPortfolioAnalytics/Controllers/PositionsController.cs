@@ -5,18 +5,16 @@ using MarketPortfolioAnalytics.Models;
 
 namespace MarketPortfolioAnalytics.Controllers
 {
-    /// <summary>
-    /// Gestion des positions — table d'association entre Portfolio et Asset.
-    ///
-    /// Une position répond à : "Dans CE portefeuille, je détiens CET actif,
-    /// en CETTE quantité, acheté à CE prix moyen le CETTE date."
-    ///
-    /// Règles importantes :
-    ///   - La clé est composite (PortfolioId, AssetId) — un actif une fois par portefeuille.
-    ///   - PortfolioId et AssetId sont immuables après création.
-    ///   - Seuls Quantity, AvgBuyPrice et BuyDate sont modifiables via PUT.
-    ///   - Quantity et AvgBuyPrice doivent toujours être strictement positifs.
-    /// </summary>
+
+    // Gestion des positions — table d'association entre Portfolio et Asset.
+    // Une position répond à : "Dans CE portefeuille, je détiens CET actif,
+    // en CETTE quantité, acheté à CE prix moyen le CETTE date."
+    //
+    // Règles importantes :
+    //   - La clé est composite (PortfolioId, AssetId) — un actif une fois par portefeuille.
+    //   - PortfolioId et AssetId sont immuables après création.
+    //   - Seuls Quantity, AvgBuyPrice et BuyDate sont modifiables via PUT.
+    //   - Quantity et AvgBuyPrice doivent toujours être strictement positifs.
     [Route("api/[controller]")]
     [ApiController]
     public class PositionsController : ControllerBase
@@ -28,20 +26,9 @@ namespace MarketPortfolioAnalytics.Controllers
             _context = context;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // LECTURE
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Retourne une position par sa clé composite (PortfolioId, AssetId).
-        ///
-        /// L'actif est inclus dans la réponse (Include Asset) pour afficher
-        /// Ticker, Name et Currency sans requête supplémentaire.
-        ///
-        /// Exemple : GET /api/Positions/1/3
-        ///   → Position du portefeuille 1 pour l'actif 3
-        /// </summary>
-        // GET api/Positions/1/3
+        // Retourne une position par sa clé composite (PortfolioId, AssetId).
+        // L'actif est inclus dans la réponse (Include Asset) pour afficher
+        // Ticker, Name et Currency sans requête supplémentaire.
         [HttpGet("{portfolioId:int}/{assetId:int}")]
         public async Task<ActionResult<Position>> GetById(int portfolioId, int assetId)
         {
@@ -59,32 +46,13 @@ namespace MarketPortfolioAnalytics.Controllers
             return position;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // CRÉATION
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Ajoute un actif dans un portefeuille (crée une position).
-        ///
-        /// Corps JSON attendu :
-        /// {
-        ///   "portfolioId":  1,            ← requis
-        ///   "assetId":      3,            ← requis
-        ///   "quantity":     10.5,         ← requis, > 0
-        ///   "avgBuyPrice":  183.50,       ← requis, > 0
-        ///   "buyDate":      "2024-01-15"  ← requis
-        /// }
-        ///
-        /// Retourne 409 Conflict si l'actif est déjà dans ce portefeuille.
-        /// Pour mettre à jour une position existante, utiliser PUT.
-        ///
-        /// Champ imposé par le serveur : CreatedAt → DateTime.UtcNow.
-        /// </summary>
-        // POST api/Positions
+        // Create suit toujours cet ordre : valider -> vérifier existence -> vérifier unicité -> construire.
+        // BuyDate.Date : on enlève l'heure, on garde juste la date -> évite les doublons.
+        // CreatedAt imposé par le serveur.
+        // Conflict 409 si l'actif est déjà dans ce portefeuille -> utiliser PUT pour mettre à jour.
         [HttpPost]
         public async Task<ActionResult<Position>> Create([FromBody] Position input)
         {
-            // ── Validations de base ───────────────────────────────────────────
             if (input.PortfolioId <= 0)
                 return BadRequest("PortfolioId est requis et doit être positif.");
 
@@ -103,21 +71,18 @@ namespace MarketPortfolioAnalytics.Controllers
             if (input.BuyDate.Date > DateTime.UtcNow.Date)
                 return BadRequest("La date d'achat ne peut pas être dans le futur.");
 
-            // ── Existence du portefeuille ─────────────────────────────────────
             bool portfolioExists = await _context.Portfolio
                 .AnyAsync(p => p.Id == input.PortfolioId);
 
             if (!portfolioExists)
                 return NotFound($"Portefeuille {input.PortfolioId} introuvable.");
 
-            // ── Existence de l'actif ──────────────────────────────────────────
             bool assetExists = await _context.Asset
                 .AnyAsync(a => a.Id == input.AssetId);
 
             if (!assetExists)
                 return NotFound($"Actif {input.AssetId} introuvable.");
 
-            // ── Unicité (PortfolioId, AssetId) ────────────────────────────────
             // Un actif ne peut apparaître qu'une seule fois dans un portefeuille.
             // Pour augmenter une position existante, utiliser PUT pour mettre à jour
             // Quantity et AvgBuyPrice.
@@ -133,7 +98,7 @@ namespace MarketPortfolioAnalytics.Controllers
                     "Utilisez PUT /api/Positions/{portfolioId}/{assetId} pour " +
                     "mettre à jour la quantité ou le prix moyen d'achat.");
 
-            // ── Construction de la position ───────────────────────────────────
+            // Construction de la position 
             var position = new Position
             {
                 PortfolioId = input.PortfolioId,
@@ -147,33 +112,21 @@ namespace MarketPortfolioAnalytics.Controllers
             _context.Position.Add(position);
             await _context.SaveChangesAsync();
 
+            // CreatedAtAction → retourne 201 Created avec l'URL de la nouvelle position.
+            // La clé est composite (portfolioId + assetId) donc on passe les deux valeurs
+            // pour que ASP.NET puisse construire l'URL complète /api/Positions/{portfolioId}/{assetId}.
             return CreatedAtAction(
                 nameof(GetById),
                 new { portfolioId = position.PortfolioId, assetId = position.AssetId },
                 position);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // MISE À JOUR
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Met à jour une position existante.
-        ///
-        /// Champs modifiables : Quantity, AvgBuyPrice, BuyDate.
-        /// Champs immuables   : PortfolioId, AssetId, CreatedAt.
-        ///
-        /// Cas d'usage typique : l'utilisateur rachète des actions supplémentaires
-        /// et veut mettre à jour sa quantité totale et son prix moyen recalculé.
-        ///
-        /// Exemple : PUT /api/Positions/1/3
-        /// {
-        ///   "quantity":    15.0,         ← nouvelle quantité totale
-        ///   "avgBuyPrice": 179.20,       ← nouveau prix moyen recalculé
-        ///   "buyDate":     "2024-01-15"  ← date du premier achat (inchangée ou mise à jour)
-        /// }
-        /// </summary>
-        // PUT api/Positions/1/3
+        
+        // Met à jour une position existante.
+        // Champs modifiables : Quantity, AvgBuyPrice, BuyDate.
+        // Champs immuables   : PortfolioId, AssetId, CreatedAt.
+        // Cas d'usage typique : l'utilisateur rachète des actions supplémentaires
+        // et veut mettre à jour sa quantité totale et son prix moyen recalculé.
         [HttpPut("{portfolioId:int}/{assetId:int}")]
         public async Task<IActionResult> Update(
             int portfolioId, int assetId,
@@ -189,7 +142,7 @@ namespace MarketPortfolioAnalytics.Controllers
                     $"Aucune position trouvée pour le portefeuille {portfolioId} " +
                     $"et l'actif {assetId}.");
 
-            // ── Validations ───────────────────────────────────────────────────
+            // Validations 
             if (input.Quantity <= 0)
                 return BadRequest("La quantité doit être strictement positive.");
 
@@ -202,7 +155,7 @@ namespace MarketPortfolioAnalytics.Controllers
             if (input.BuyDate.Date > DateTime.UtcNow.Date)
                 return BadRequest("La date d'achat ne peut pas être dans le futur.");
 
-            // ── Mise à jour des champs autorisés uniquement ───────────────────
+            // Mise à jour des champs autorisés uniquement 
             // PortfolioId, AssetId et CreatedAt ne sont pas touchés
             position.Quantity = input.Quantity;
             position.AvgBuyPrice = input.AvgBuyPrice;
@@ -212,22 +165,10 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SUPPRESSION
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Supprime une position (retire un actif d'un portefeuille).
-        ///
-        /// Cette opération est définitive.
-        /// Le portefeuille et l'actif ne sont pas supprimés — seule la relation
-        /// (la ligne dans la table Position) est supprimée.
-        ///
-        /// Exemple : DELETE /api/Positions/1/3
-        ///   → Retire l'actif 3 du portefeuille 1
-        ///   → Le portefeuille 1 et l'actif 3 restent en base
-        /// </summary>
-        // DELETE api/Positions/1/3
+        // Supprime une position (retire un actif d'un portefeuille).
+        // Cette opération est définitive.
+        // Le portefeuille et l'actif ne sont pas supprimés — seule la relation
+        // (la ligne dans la table Position) est supprimée.
         [HttpDelete("{portfolioId:int}/{assetId:int}")]
         public async Task<IActionResult> Delete(int portfolioId, int assetId)
         {
