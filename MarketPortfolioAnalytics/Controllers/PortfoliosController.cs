@@ -6,15 +6,13 @@ using MarketPortfolioAnalytics.Models;
 
 namespace MarketPortfolioAnalytics.Controllers
 {
-    /// <summary>
-    /// Gestion des portefeuilles financiers.
-    ///
-    /// Règles importantes :
-    ///   - GET /api/Portfolios exige un userId — on n'expose jamais tous les portefeuilles.
-    ///   - Seuls Name et Currency sont modifiables via PUT.
-    ///   - UserId et CreatedAt sont immuables après création.
-    ///   - Un portefeuille contenant des positions ne peut pas être supprimé directement.
-    /// </summary>
+
+    // Gestion des portefeuilles financiers.
+    // Règles importantes :
+    //   - GET /api/Portfolios exige un userId — on n'expose jamais tous les portefeuilles.
+    //   - Seuls Name et Currency sont modifiables via PUT.
+    //   - UserId et CreatedAt sont immuables après création.
+    //   - Un portefeuille contenant des positions ne peut pas être supprimé directement.
     [Route("api/[controller]")]
     [ApiController]
     public class PortfoliosController : ControllerBase
@@ -26,20 +24,9 @@ namespace MarketPortfolioAnalytics.Controllers
             _context = context;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // LECTURE
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Retourne les portefeuilles d'un utilisateur.
-        ///
-        /// Le paramètre userId est obligatoire.
-        /// On refuse de retourner tous les portefeuilles sans filtre utilisateur
-        /// pour éviter d'exposer les données de tous les utilisateurs.
-        ///
-        /// Exemple : GET /api/Portfolios?userId=1
-        /// </summary>
-        // GET api/Portfolios?userId=1
+        // [FromQuery] : userId vient de l'URL → /api/Portfolios?userId=3
+        // userId obligatoire : sans filtre on exposerait les données de tous les users.
+        // On vérifie aussi que l'utilisateur existe et est actif avant de chercher.
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Portfolio>>> GetByUser(
             [FromQuery] int? userId)
@@ -64,11 +51,8 @@ namespace MarketPortfolioAnalytics.Controllers
             return portfolios;
         }
 
-        /// <summary>
-        /// Retourne un portefeuille par son Id, sans ses positions.
-        /// Pour avoir les positions, utiliser GET /api/Portfolios/{id}/details.
-        /// </summary>
-        // GET api/Portfolios/5
+        // Retourne un portefeuille par son Id, sans ses positions.
+        // Pour avoir les positions, utiliser GET /api/Portfolios/{id}/details.
         [HttpGet("{id}")]
         public async Task<ActionResult<Portfolio>> GetById(int id)
         {
@@ -80,15 +64,9 @@ namespace MarketPortfolioAnalytics.Controllers
             return portfolio;
         }
 
-        /// <summary>
-        /// Retourne un portefeuille avec ses positions et les détails de chaque actif.
-        ///
-        /// Utilise Include + ThenInclude pour charger en une seule requête SQL :
-        ///   Portfolio → ListePositions → Asset (avec son type réel Stock ou Bond)
-        ///
-        /// C'est l'endpoint utilisé pour afficher le détail complet d'un portefeuille.
-        /// </summary>
-        // GET api/Portfolios/5/details
+        // Include + ThenInclude : charge les positions ET leurs actifs en une seule requête SQL.
+        // Sans Include -> ListePositions serait null (EF Core ne charge pas automatiquement).
+        // ThenInclude -> pour chaque position, charge aussi l'actif associé.
         [HttpGet("{id}/details")]
         public async Task<ActionResult<Portfolio>> GetDetails(int id)
         {
@@ -103,13 +81,9 @@ namespace MarketPortfolioAnalytics.Controllers
             return portfolio;
         }
 
-        /// <summary>
-        /// Retourne uniquement les positions d'un portefeuille, avec les actifs associés.
-        ///
-        /// Différence avec /details : retourne une liste de positions
-        /// et non le portefeuille complet. Plus adapté si on veut juste la liste.
-        /// </summary>
-        // GET api/Portfolios/5/positions
+        // Retourne uniquement les positions d'un portefeuille, avec les actifs associés.
+        // Différence avec /details : retourne une liste de positions
+        // et non le portefeuille complet. Plus adapté si on veut juste la liste.
         [HttpGet("{id}/positions")]
         public async Task<ActionResult<IEnumerable<Position>>> GetPositions(int id)
         {
@@ -127,32 +101,18 @@ namespace MarketPortfolioAnalytics.Controllers
             return positions;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // CRÉATION
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Crée un nouveau portefeuille pour un utilisateur actif.
-        ///
-        /// Corps JSON attendu :
-        /// {
-        ///   "name":     "Mon portefeuille tech",  ← requis
-        ///   "currency": "EUR",                    ← optionnel, défaut EUR
-        ///   "userId":   1                         ← requis
-        /// }
-        ///
-        /// Champs imposés par le serveur (ignorés si fournis) :
-        ///   - CreatedAt → DateTime.UtcNow
-        /// </summary>
+        // CreatedAt imposé par le serveur → le client ne peut pas choisir la date de création.
+        // Currency normalisée en majuscules et validée → "eur" devient "EUR".
+        // Regex [A-Z]{3} → exactement 3 lettres majuscules, norme ISO 4217.
         // POST api/Portfolios
         [HttpPost]
         public async Task<ActionResult<Portfolio>> Create([FromBody] Portfolio input)
         {
-            // ── Validation du nom ─────────────────────────────────────────────
+            // Validation du nom 
             if (string.IsNullOrWhiteSpace(input.Name))
                 return BadRequest("Le nom du portefeuille est requis.");
 
-            // ── Validation de l'utilisateur ───────────────────────────────────
+            // Validation de l'utilisateur 
             if (input.UserId <= 0)
                 return BadRequest("UserId est requis et doit être positif.");
 
@@ -164,7 +124,7 @@ namespace MarketPortfolioAnalytics.Controllers
                     $"Utilisateur {input.UserId} introuvable ou inactif. " +
                     "Impossible de créer un portefeuille pour cet utilisateur.");
 
-            // ── Validation de la devise ───────────────────────────────────────
+            // Validation de la devise
             // Si non fournie, on applique EUR par défaut
             string currency = string.IsNullOrWhiteSpace(input.Currency)
                 ? "EUR"
@@ -174,7 +134,7 @@ namespace MarketPortfolioAnalytics.Controllers
                 return BadRequest(
                     "La devise doit être un code ISO 4217 à 3 lettres (ex: EUR, USD, GBP).");
 
-            // ── Construction de l'entité ──────────────────────────────────────
+            // Construction de l'entité 
             var portfolio = new Portfolio
             {
                 Name = input.Name.Trim(),
@@ -189,19 +149,10 @@ namespace MarketPortfolioAnalytics.Controllers
             return CreatedAtAction(nameof(GetById), new { id = portfolio.Id }, portfolio);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // MISE À JOUR
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Met à jour le nom et/ou la devise d'un portefeuille.
-        ///
-        /// Champs modifiables : Name, Currency.
-        /// Champs immuables   : UserId, CreatedAt.
-        ///
-        /// UserId est immuable : un portefeuille ne change pas de propriétaire.
-        /// </summary>
-        // PUT api/Portfolios/5
+        // Met à jour le nom et/ou la devise d'un portefeuille.
+        // Champs modifiables : Name, Currency.
+        // Champs immuables   : UserId, CreatedAt.
+        // UserId est immuable : un portefeuille ne change pas de propriétaire.
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] Portfolio input)
         {
@@ -210,13 +161,13 @@ namespace MarketPortfolioAnalytics.Controllers
             if (portfolio is null)
                 return NotFound($"Portefeuille {id} introuvable.");
 
-            // ── Name ──────────────────────────────────────────────────────────
+            // Name 
             if (string.IsNullOrWhiteSpace(input.Name))
                 return BadRequest("Le nom du portefeuille est requis.");
 
             portfolio.Name = input.Name.Trim();
 
-            // ── Currency ──────────────────────────────────────────────────────
+            // Currency 
             if (!string.IsNullOrWhiteSpace(input.Currency))
             {
                 string currency = input.Currency.Trim().ToUpper();
@@ -232,22 +183,9 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SUPPRESSION
-        // ═══════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Supprime un portefeuille vide (sans positions).
-        ///
-        /// Bloqué si le portefeuille contient des positions.
-        /// L'utilisateur doit d'abord supprimer toutes ses positions
-        /// via DELETE /api/Positions/{portfolioId}/{assetId}.
-        ///
-        /// Note : la contrainte Cascade dans le DbContext supprimerait les positions
-        /// automatiquement si on supprimait directement en base, mais on préfère
-        /// bloquer ici pour éviter une suppression accidentelle de données.
-        /// </summary>
-        // DELETE api/Portfolios/5
+        // On bloque la suppression si le portefeuille contient des positions.
+        // Cascade en base supprimerait tout automatiquement, mais on préfère bloquer
+        // pour éviter une suppression accidentelle → l'user supprime d'abord ses positions.
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
