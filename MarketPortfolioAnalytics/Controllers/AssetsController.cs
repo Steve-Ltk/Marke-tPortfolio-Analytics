@@ -12,38 +12,40 @@ namespace MarketPortfolioAnalytics.Controllers
     [ApiController]
     public class AssetsController : ControllerBase
     {
-        private readonly MarketPortfolioAnalyticsContext _context;
-        private readonly FmpService _fmp;
-        // ✅ Logger ajouté — nécessaire pour GetPrice et GetExchangeRate
-        private readonly ILogger<AssetsController> _logger;
+        private readonly MarketPortfolioAnalyticsContext _context; // accès à la base
+        private readonly FmpService _fmp; // accès à l'API FMP
+        private readonly ILogger<AssetsController> _logger; // pour écrire des logs
 
         public AssetsController(
             MarketPortfolioAnalyticsContext context,
             FmpService fmp,
             ILogger<AssetsController> logger)
         {
-            _context = context;
-            _fmp = fmp;
-            _logger = logger;
+            _context = context; // _context -> pour lire/écrire en base de données
+            _fmp = fmp; // _fmp -> pour appeler l'API Financial Modeling Prep
+            _logger = logger; // _logger -> pour écrire des messages de debug/erreur dans la console
         }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // LECTURE
-        // ═══════════════════════════════════════════════════════════════════════
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Asset>>> GetAll()
             => await _context.Asset.ToListAsync();
-
+            
+        // GetById cherche d'abord dans Stock, puis Bond, puis Asset générique.
+        // Nécessaire à cause du TPT : FindAsync sur Asset retourne un objet de base
+        // sans les propriétés spécifiques (Sector, CouponRate...).
+        // _context.Set<Stock>() = accès à la table Stock sans DbSet déclaré.
         [HttpGet("{id}")]
         public async Task<ActionResult<Asset>> GetById(int id)
         {
+            // Je cherche d'abord dans Stock
             var stock = await _context.Set<Stock>().FirstOrDefaultAsync(s => s.Id == id);
             if (stock is not null) return stock;
 
+            // Puis dans Bond
             var bond = await _context.Set<Bond>().FirstOrDefaultAsync(b => b.Id == id);
             if (bond is not null) return bond;
 
+            // Sinon Asset générique
             var asset = await _context.Asset.FindAsync(id);
             if (asset is null) return NotFound($"Actif {id} introuvable.");
             return asset;
@@ -64,13 +66,10 @@ namespace MarketPortfolioAnalytics.Controllers
             return asset;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // PRIX TEMPS RÉEL
-        // GET /api/Assets/price/{ticker}
-        // ✅ Utilise _fmp.GetLatestPriceAsync() — méthode maintenant définie dans FmpService
-        // ✅ Utilise _logger injecté dans le constructeur
-        // ═══════════════════════════════════════════════════════════════════════
-
+        // Retourne le prix actuel d'un actif via FMP.
+        // try/catch : si FMP tombe en panne, on retourne 503 proprement
+        // au lieu de planter toute l'app avec une exception non gérée.
+        // 503 = "service tiers indisponible" → différent d'une erreur de notre code.
         [HttpGet("price/{ticker}")]
         public async Task<ActionResult<decimal>> GetPrice(string ticker)
         {
@@ -94,6 +93,10 @@ namespace MarketPortfolioAnalytics.Controllers
             }
         }
 
+        // Retourne le prix ET la variation journalière en un seul appel FMP.
+        // var (price, change) = -> déconstruction de tuple : deux valeurs en une ligne.
+        // new { price, change } -> objet anonyme, pas besoin de créer une classe pour ça.
+        // Si price == 0 -> FMP n'a pas répondu → 404.
         [HttpGet("quote/{ticker}")]
         public async Task<ActionResult<object>> GetQuote(string ticker)
         {
@@ -104,13 +107,6 @@ namespace MarketPortfolioAnalytics.Controllers
             if (price == 0m) return NotFound();
             return Ok(new { price, change });
         }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // TAUX DE CHANGE
-        // GET /api/Assets/exchange-rate?from=EUR&to=USD
-        // ✅ Utilise _fmp.GetExchangeRateAsync() — méthode maintenant définie dans FmpService
-        // ✅ Utilise _logger injecté dans le constructeur
-        // ═══════════════════════════════════════════════════════════════════════
 
         [HttpGet("exchange-rate")]
         public async Task<ActionResult<decimal>> GetExchangeRate(
@@ -132,10 +128,13 @@ namespace MarketPortfolioAnalytics.Controllers
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // CRÉATION
-        // ═══════════════════════════════════════════════════════════════════════
-
+         // Importe une action depuis FMP en 3 étapes :
+         // 1. Vérifie que le ticker n'existe pas déjà en base
+         // 2. Récupère le profil complet depuis FMP (nom, devise, exchange, secteur...)
+         // 3. Crée le Stock en base avec ces données
+         //
+         // profile.Sector ?? input.Sector → prend FMP en priorité, sinon ce que le client envoie.
+         // DeclaredType = typeof(Asset) → force la sérialisation polymorphique avec "assetType".
         [HttpPost("stocks/from-fmp")]
         public async Task<ActionResult<Asset>> CreateStock([FromBody] CreateStockRequest input)
         {
@@ -221,10 +220,6 @@ namespace MarketPortfolioAnalytics.Controllers
             return result;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // MISE À JOUR
-        // ═══════════════════════════════════════════════════════════════════════
-
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateAssetRequest input)
         {
@@ -249,10 +244,9 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // SUPPRESSION
-        // ═══════════════════════════════════════════════════════════════════════
-
+        // Supprime un actif uniquement s'il n'est dans aucun portefeuille.
+        // On vérifie en C# AVANT d'essayer en base -> message d'erreur clair pour le client.
+        // Sans cette vérification, SQL Server lancerait une exception Restrict illisible.
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -270,10 +264,6 @@ namespace MarketPortfolioAnalytics.Controllers
             return NoContent();
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DTOs
-    // ═══════════════════════════════════════════════════════════════════════════
 
     public record CreateStockRequest(string? Ticker, string? Sector, string? ISIN);
     public record UpdateAssetRequest(string? Name, string? Exchange, string? Currency);
