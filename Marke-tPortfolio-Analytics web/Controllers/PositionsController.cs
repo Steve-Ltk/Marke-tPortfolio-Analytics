@@ -84,7 +84,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         {
             var portfolio = await ApiService.GetPortfolioByIdAsync(portfolioId);
             if (portfolio == null || portfolio.UserId != GetUserId())
-                return NotFound();
+                return RedirectToAction("Index", "Portfolios");
 
             // ✅ GetPositionByKeyAsync(portfolioId, assetId)
             var position = await ApiService.GetPositionByKeyAsync(portfolioId, assetId);

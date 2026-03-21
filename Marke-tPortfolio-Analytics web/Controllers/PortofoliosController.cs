@@ -183,7 +183,12 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             var p = await ApiService.GetPortfolioByIdAsync(id);
             if (p == null || p.UserId != GetUserId()) return NotFound();
 
-            await ApiService.DeletePortfolioAsync(id);
+            var ok = await ApiService.DeletePortfolioAsync(id);
+            if (!ok)
+            {
+                SetError($"Impossible de supprimer « {p.Name} » : retirez d'abord toutes ses positions.");
+                return RedirectToAction(nameof(Details), new { id });
+            }
             SetSuccess($"Portefeuille « {p.Name} » supprimé.");
             return RedirectToAction(nameof(Index));
         }

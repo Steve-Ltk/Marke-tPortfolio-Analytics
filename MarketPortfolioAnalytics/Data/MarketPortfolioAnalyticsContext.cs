@@ -3,19 +3,16 @@ using MarketPortfolioAnalytics.Models;
 
 namespace MarketPortfolioAnalytics.Data
 {
-    /// <summary>
-    /// Point d'entrée d'Entity Framework Core vers la base SQL Server.
-    /// Configure les tables, les relations, les contraintes et les comportements de suppression.
-    /// </summary>
+    
+    // Configure les tables, les relations, les contraintes et les comportements de suppression.
     public class MarketPortfolioAnalyticsContext : DbContext
     {
         public MarketPortfolioAnalyticsContext(DbContextOptions<MarketPortfolioAnalyticsContext> options)
             : base(options) { }
 
-        // ── DbSets ────────────────────────────────────────────────────────────
-        // Un DbSet par entité principale.
-        // Stock et Bond n'ont pas besoin de DbSet séparé :
-        // EF les gère via DbSet<Asset> grâce à la configuration TPT ci-dessous.
+        // Gere les interactions entre le code C# et SQL Server.
+        // Chaque DbSet correspond à une table en base.
+        // On ne parle jamais directement à la base — toujours via _context
 
         public DbSet<AppUser> AppUser { get; set; } = default!;
         public DbSet<Portfolio> Portfolio { get; set; } = default!;
@@ -27,20 +24,13 @@ namespace MarketPortfolioAnalytics.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // ── Héritage TPT (Table Per Type) ─────────────────────────────────
-            //
-            // EF crée 3 tables :
-            //   "Asset"  → colonnes communes (Id, Name, Ticker, Exchange, Currency, CreatedAt)
-            //   "Stock"  → uniquement (Id FK, Sector, ISIN)
-            //   "Bond"   → uniquement (Id FK, MaturityDate, CouponRate)
-            //
-            // Quand on charge un Stock, EF fait une jointure Asset ↔ Stock automatiquement.
+            // TPT : 3 tables séparées en base.
+            // Asset = colonnes communes. Stock = juste Sector+ISIN. Bond = juste CouponRate+MaturityDate.
+            // EF fait la jointure automatiquement quand on charge un Stock ou un Bond. Asset <-> Stock automatiquement.
 
             modelBuilder.Entity<Asset>().ToTable("Asset");
             modelBuilder.Entity<Stock>().ToTable("Stock");
             modelBuilder.Entity<Bond>().ToTable("Bond");
-
-            // ── Index d'unicité ───────────────────────────────────────────────
 
             // Un email ne peut appartenir qu'à un seul utilisateur
             modelBuilder.Entity<AppUser>()
@@ -49,7 +39,7 @@ namespace MarketPortfolioAnalytics.Data
                 .HasDatabaseName("IX_AppUser_Email");
 
             // Un ticker est unique dans toute la table Asset
-            // → on ne peut pas avoir deux fois "AAPL"
+            // -> on ne peut pas avoir deux fois "AAPL"
             modelBuilder.Entity<Asset>()
                 .HasIndex(a => a.Ticker)
                 .IsUnique()
@@ -62,18 +52,15 @@ namespace MarketPortfolioAnalytics.Data
                 .IsUnique()
                 .HasDatabaseName("IX_AssetPrice_AssetId_Date");
 
-            // ── Clé composite Position (PortfolioId, AssetId) ─────────────────
-            //
+            // Clé composite Position (PortfolioId, AssetId) 
             // Un actif ne peut apparaître qu'une seule fois dans un portefeuille.
             // EF ne peut pas deviner cette PK composite automatiquement
-            // → on la déclare explicitement ici.
+            // -> on la déclare explicitement ici.
 
             modelBuilder.Entity<Position>()
                 .HasKey(p => new { p.PortfolioId, p.AssetId });
 
-            // ── Relations et comportements de suppression ─────────────────────
-
-            // AppUser → Portfolio
+            // AppUser -> Portfolio
             // Restrict : on ne peut pas supprimer un AppUser qui possède des portefeuilles.
             // En pratique : on désactive l'utilisateur (soft delete), on ne le supprime pas.
             modelBuilder.Entity<Portfolio>()
@@ -82,7 +69,7 @@ namespace MarketPortfolioAnalytics.Data
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Portfolio → Position
+            // Portfolio -> Position
             // Cascade : supprimer un portefeuille supprime toutes ses positions.
             // Le contrôleur bloque aussi la suppression si des positions existent
             // (double sécurité applicative + base).
@@ -92,7 +79,7 @@ namespace MarketPortfolioAnalytics.Data
                 .HasForeignKey(p => p.PortfolioId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Asset → Position
+            // Asset -> Position
             // Restrict : on ne peut pas supprimer un actif utilisé dans une position.
             // Le contrôleur vérifie aussi cela avant de tenter la suppression.
             modelBuilder.Entity<Position>()
@@ -101,7 +88,7 @@ namespace MarketPortfolioAnalytics.Data
                 .HasForeignKey(p => p.AssetId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Asset → AssetPrice
+            // Asset -> AssetPrice
             // Cascade : supprimer un actif supprime tout son historique de prix.
             // Logique : sans l'actif, les prix n'ont plus de sens.
             modelBuilder.Entity<AssetPrice>()

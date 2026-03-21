@@ -4,108 +4,72 @@ using System.Text.Json.Serialization;
 
 namespace MarketPortfolioAnalytics.Models
 {
-    /// <summary>
-    /// Classe mère représentant un instrument financier coté en bourse.
-    /// Un actif peut être présent dans plusieurs portefeuilles via des positions.
-    /// Un actif possède un historique de prix (AssetPrice).
-    ///
-    /// Héritage TPT (Table Per Type) :
-    ///   - La table "Asset" contient les colonnes communes à tous les actifs.
-    ///   - La table "Stock" ne contient que les colonnes propres aux actions.
-    ///   - La table "Bond"  ne contient que les colonnes propres aux obligations.
-    ///   EF fait automatiquement la jointure entre ces tables.
-    ///
-    /// JsonPolymorphic : permet à ASP.NET de sérialiser/désérialiser correctement
-    /// un Stock ou un Bond quand on travaille avec une référence de type Asset.
-    /// Le champ "assetType" apparaît dans le JSON pour indiquer le type réel.
-    /// </summary>
+    // Ces 3 attributs permettent à .NET de savoir si le JSON représente
+    // un Stock ou un Bond quand il reçoit/envoie des données.
+    // Le champ "assetType" dans le JSON joue le rôle de discriminateur.
     [JsonPolymorphic(TypeDiscriminatorPropertyName = "assetType")]
     [JsonDerivedType(typeof(Stock), "Stock")]
     [JsonDerivedType(typeof(Bond), "Bond")]
     [Table("Asset")]
+
+    // Fiche de base commune à tous les actifs financiers.
+    // Stock et Bond héritent de cette classe et ajoutent leurs infos spécifiques.
+    // EF crée une table "Asset" en base avec ces colonnes communes.
     public class Asset
     {
         [Key]
-        public int Id { get; set; }
+        public int Id { get; set; } // le numéro unique de la fiche
 
-        /// <summary>Nom complet de l'instrument (ex: "Apple Inc.").</summary>
         [Required]
         [MaxLength(200)]
-        public string Name { get; set; } = null!;
+        public string Name { get; set; } = null!; // "Apple Inc."
 
-        /// <summary>
-        /// Symbole boursier unique (ex: "AAPL", "MC.PA").
-        /// Normalisé en majuscules à l'insertion.
-        /// L'unicité est enforced en base via un index unique dans le DbContext.
-        /// </summary>
         [Required]
         [MaxLength(20)]
-        public string Ticker { get; set; } = null!;
+        public string Ticker { get; set; } = null!; // "AAPL" — le surnom boursier
 
-        /// <summary>Place de cotation (ex: "NASDAQ", "EURONEXT"). Optionnel.</summary>
+       
         [MaxLength(50)]
-        public string? Exchange { get; set; }
+        public string? Exchange { get; set; } // "NASDAQ" — où il est coté
 
-        /// <summary>
-        /// Devise de cotation de l'actif — code ISO 4217, 3 lettres (ex: "USD", "EUR").
-        /// Attention : peut différer de la devise du portefeuille.
-        /// </summary>
         [Required]
         [MaxLength(3)]
-        public string Currency { get; set; } = null!;
+        public string Currency { get; set; } = null!; // "USD" — dans quelle devise
 
-        /// <summary>Date d'ajout de l'actif dans la plateforme (UTC, automatique).</summary>
         [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow; // quand on l'a ajouté
 
-        // ── Navigation ────────────────────────────────────────────────────────
-        /// <summary>
-        /// Historique des prix de marché de cet actif.
-        /// JsonIgnore : on ne retourne pas tout l'historique quand on consulte un actif.
-        /// </summary>
-        [JsonIgnore]
+        // [JsonIgnore] : l'historique de prix n'est jamais inclus quand on
+        // retourne un actif en JSON. Trop lourd (des centaines de lignes).
+        // On les récupère séparément via /api/AssetPrices/by-asset/{id}.
         public virtual ICollection<AssetPrice>? Prices { get; set; }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Action (equity) — hérite de Asset.
-    /// La table "Stock" en base ne contient que Sector et ISIN.
-    /// EF jointure automatiquement avec la table "Asset" sur l'Id.
-    /// </summary>
+    // Action boursière. Hérite d'Asset.
+    // EF crée une table "Stock" avec juste Sector et ISIN.
+    // Pour avoir un Stock complet, EF joint la table Asset + Stock automatiquement.
     [Table("Stock")]
     public class Stock : Asset
     {
-        /// <summary>Secteur d'activité (ex: "Technology", "Healthcare"). Optionnel.</summary>
         [MaxLength(100)]
         public string? Sector { get; set; }
 
-        /// <summary>
-        /// Code ISIN — identifiant international de l'instrument (norme ISO 6166).
-        /// Toujours 12 caractères (ex: "US0378331005"). Optionnel.
-        /// </summary>
         [MaxLength(12)]
         public string? ISIN { get; set; }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Obligation (bond) — hérite de Asset.
-    /// La table "Bond" en base ne contient que MaturityDate et CouponRate.
-    /// EF jointure automatiquement avec la table "Asset" sur l'Id.
-    /// </summary>
+    // Obligation financière. Hérite d'Asset.
+    // Ajoute le taux du coupon (ex: 3.125%) et la date d'échéance.
+    // Pas de prix temps réel FMP sur plan gratuit — on stocke juste les métadonnées.
     [Table("Bond")]
     public class Bond : Asset
     {
-        /// <summary>Date d'échéance de l'obligation (maturité). Optionnelle.</summary>
         public DateTime? MaturityDate { get; set; }
 
-        /// <summary>
-        /// Taux du coupon en pourcentage (ex: 4.35 = 4.35% par an). Optionnel.
-        /// decimal(6,4) : jusqu'à 99.9999%, précision 4 décimales.
-        /// </summary>
+        // Taux du coupon en pourcentage (ex: 4.35 = 4.35% par an). Optionnel.
+        // decimal(6,4) : jusqu'à 99.9999%, précision 4 décimales.
         [Column(TypeName = "decimal(6,4)")]
         public decimal? CouponRate { get; set; }
     }

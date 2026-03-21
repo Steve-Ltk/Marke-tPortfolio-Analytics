@@ -170,7 +170,8 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
 
             return Json(new
             {
-                portfolioReturn = Math.Round(result.TotalReturnPct, 2),         // ✅
+                portfolioReturn = Math.Round(result.TotalReturnPct, 2),
+                sortino = Math.Round(result.SortinoRatio, 3), // ✅
                 benchmarkReturn = Math.Round(result.BenchmarkReturnPct ?? 0, 2),// ✅
                 alpha = Math.Round(result.Alpha, 2),                  // ✅
                 beta = Math.Round(result.Beta, 3),                  // ✅
@@ -275,10 +276,10 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 portfolios = result.Portfolios.Select(p => new
                 {
                     name = p.PortfolioName,
-                    annualizedReturn = Math.Round(p.AnnualizedReturn * 100, 2),
-                    volatility = Math.Round(p.Volatility * 100, 2),
+                    annualizedReturn = Math.Round(p.AnnualizedReturn, 2),
+                    volatility = Math.Round(p.Volatility, 2),
                     sharpe = Math.Round(p.SharpeRatio, 3),
-                    maxDrawdown = Math.Round(p.MaxDrawdown * 100, 2),
+                    maxDrawdown = Math.Round(p.MaxDrawdown, 2),
                     totalReturn = Math.Round((double)p.TotalReturnPct, 2)
                 }).ToList()
             });
@@ -297,10 +298,10 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         private static string MessageGlobal(string niveau, PortfolioAnalyticsResult a)
             => niveau switch
             {
-                "Danger" => $"Portefeuille à risque élevé — Sharpe {a.SharpeRatio:F2}, drawdown {a.MaxDrawdown * 100:F1}%. Action immédiate recommandée.",
+                "Danger" => $"Portefeuille à risque élevé — Sharpe {a.SharpeRatio:F2}, drawdown {a.MaxDrawdown:F1}%. Action immédiate recommandée.",
                 "Insuffisant" => $"Performance en dessous des attentes — Sharpe {a.SharpeRatio:F2}. Diversification à améliorer.",
-                "Bon" => $"Portefeuille solide — Sharpe {a.SharpeRatio:F2}, rendement {a.AnnualizedReturn * 100:F1}%/an. Optimisation possible.",
-                _ => $"Performance excellente — Sharpe {a.SharpeRatio:F2}, rendement {a.AnnualizedReturn * 100:F1}%/an. Maintenez cette stratégie."
+                "Bon" => $"Portefeuille solide — Sharpe {a.SharpeRatio:F2}, rendement {a.AnnualizedReturn:F1}%/an. Optimisation possible.",
+                _ => $"Performance excellente — Sharpe {a.SharpeRatio:F2}, rendement {a.AnnualizedReturn:F1}%/an. Maintenez cette stratégie."
             };
     }
 }
