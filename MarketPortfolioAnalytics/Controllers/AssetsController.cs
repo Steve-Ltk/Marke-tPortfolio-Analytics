@@ -94,6 +94,17 @@ namespace MarketPortfolioAnalytics.Controllers
             }
         }
 
+        [HttpGet("quote/{ticker}")]
+        public async Task<ActionResult<object>> GetQuote(string ticker)
+        {
+            if (string.IsNullOrWhiteSpace(ticker))
+                return BadRequest("Ticker requis.");
+
+            var (price, change) = await _fmp.GetQuoteAsync(ticker.Trim().ToUpper());
+            if (price == 0m) return NotFound();
+            return Ok(new { price, change });
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         // TAUX DE CHANGE
         // GET /api/Assets/exchange-rate?from=EUR&to=USD

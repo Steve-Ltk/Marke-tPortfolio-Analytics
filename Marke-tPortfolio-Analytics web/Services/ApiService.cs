@@ -164,7 +164,7 @@ namespace Marke_tPortfolio_Analytics_web.Services
 
         // ══════════════════════════════════════════════════════════════════════
         // POSITIONS — clé composite (PortfolioId, AssetId)
-        // POST   /api/Portfolios/{id}/positions
+        // POST   /api/positions
         // GET    /api/Portfolios/{id}/positions
         // GET    /api/Positions/{portfolioId}/{assetId}
         // PUT    /api/Positions/{portfolioId}/{assetId}
@@ -180,7 +180,7 @@ namespace Marke_tPortfolio_Analytics_web.Services
         public Task<Position?> CreatePositionAsync(
             int portfolioId, int assetId, decimal quantity,
             decimal avgBuyPrice, DateTime buyDate)
-            => PostAsync<Position>($"api/Portfolios/{portfolioId}/positions", new
+            => PostAsync<Position>("api/Positions", new
             {
                 portfolioId,
                 assetId,
@@ -221,6 +221,12 @@ namespace Marke_tPortfolio_Analytics_web.Services
             => PostAsync<Asset>("api/Assets/stocks/from-fmp",
                 new { ticker = ticker.ToUpper() });
 
+        public Task<Asset?> ImportBondFromFmpAsync(string ticker)
+           => PostAsync<Asset>("api/Assets/bonds/from-fmp",
+                new { ticker = ticker.ToUpper() });
+
+        public Task<bool> DeleteAssetAsync(int id)
+          => DeleteAsync($"api/Assets/{id}");
         // ══════════════════════════════════════════════════════════════════════
         // PRIX & TAUX DE CHANGE
         // ══════════════════════════════════════════════════════════════════════
@@ -258,6 +264,37 @@ namespace Marke_tPortfolio_Analytics_web.Services
             }
             catch (Exception ex)
             { _logger.LogError(ex, "GetExchangeRate {F}/{T}", from, to); return 1m; }
+        }
+
+        public async Task<(decimal Price, decimal ChangePercent)> GetQuoteAsync(string ticker)
+        {
+            try
+            {
+                var r = await Client().GetAsync(
+                    $"api/Assets/quote/{ticker.Trim().ToUpper()}");
+                if (!r.IsSuccessStatusCode) return (0m, 0m);
+
+                var text = await r.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(text);
+                var root = doc.RootElement;
+
+                decimal price = 0m, change = 0m;
+
+                if (root.TryGetProperty("price", out var p)
+                    && p.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    price = p.GetDecimal();
+
+                if (root.TryGetProperty("change", out var c)
+                    && c.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    change = c.GetDecimal();
+
+                return (price, change);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GetQuoteAsync {Ticker}", ticker);
+                return (0m, 0m);
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════

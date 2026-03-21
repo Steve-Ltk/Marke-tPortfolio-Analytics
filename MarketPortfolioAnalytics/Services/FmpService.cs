@@ -274,6 +274,41 @@ namespace MarketPortfolioAnalytics.Services
             return null;
         }
 
+        public async Task<(decimal price, decimal changePercent)> GetQuoteAsync(string ticker)
+        {
+            string symbol = ticker.Trim().ToUpper();
+            var urls = new[]
+            {
+        $"{_opt.BaseUrl}/stable/quote?symbol={symbol}&apikey={_opt.ApiKey}",
+        $"{_opt.BaseUrl}/api/v3/quote/{symbol}?apikey={_opt.ApiKey}",
+    };
+
+            foreach (var url in urls)
+            {
+                string? json = await GetJsonAsync(url);
+                if (json is null) continue;
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array
+                        && doc.RootElement.GetArrayLength() > 0)
+                    {
+                        var first = doc.RootElement[0];
+                        decimal price = 0m, change = 0m;
+                        if (first.TryGetProperty("price", out var p)
+                            && p.ValueKind == JsonValueKind.Number)
+                            price = p.GetDecimal();
+                        if (first.TryGetProperty("changePercentage", out var c)
+                            && c.ValueKind == JsonValueKind.Number)
+                            change = c.GetDecimal();
+                        if (price > 0) return (price, change);
+                    }
+                }
+                catch (JsonException) { }
+            }
+            return (0m, 0m);
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         // ENDPOINT 5 — Taux de change spot  ✅ DANS LA CLASSE
         // ═══════════════════════════════════════════════════════════════════════
@@ -338,6 +373,8 @@ namespace MarketPortfolioAnalytics.Services
 
             return 0m;
         }
+
+
 
         // ═══════════════════════════════════════════════════════════════════════
         // HELPERS PRIVÉS

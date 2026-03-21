@@ -112,10 +112,10 @@
     </div>
 
     <!-- Actions rapides -->
+    <!-- Actions rapides -->
     <div style="display:flex;flex-direction:column;gap:14px">
         <div class="card">
             <div class="card-header"><div class="card-title">Ajouter à un portefeuille</div></div>
-
             @if (Model.EstDansPortefeuille)
             {
                 <div class="insight-box" style="margin-bottom:14px">
@@ -126,7 +126,6 @@
                     }
                 </div>
             }
-
             <a href="/Portfolios" class="btn btn-green btn-full" style="height:42px;font-size:13px">
                 Voir mes portefeuilles →
             </a>
@@ -134,7 +133,6 @@
                 Accédez à un portefeuille et cliquez<br>« + Position » pour ajouter @Model.Asset.Ticker
             </div>
         </div>
-
         <div class="card">
             <div class="card-header"><div class="card-title">Analytics</div></div>
             <p style="font-size:13px;color:var(--t4);margin-bottom:14px">
@@ -144,5 +142,34 @@
                 Ouvrir Analytics →
             </a>
         </div>
+
+        @* ── Suppression ── *@
+        @if (!Model.EstDansPortefeuille)
+        {
+            <div class="card">
+                <div class="card-header"><div class="card-title">⚠️ Supprimer l'actif</div></div>
+                <p style="font-size:13px;color:var(--t4);margin-bottom:14px">
+                    Cet actif n'est dans aucun portefeuille.
+                </p>
+                <form asp-action="Delete" asp-controller="Assets" method="post"
+                      onsubmit="return confirm('Supprimer @Model.Asset.Ticker définitivement ?')">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Asset.Id" />
+                    <button type="submit" class="btn btn-danger btn-full">
+                        🗑 Supprimer @Model.Asset.Ticker
+                    </button>
+                </form>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-header"><div class="card-title">🔒 Suppression impossible</div></div>
+                <p style="font-size:12px;color:var(--t4)">
+                    Retirez d'abord cet actif de tous vos portefeuilles.
+                </p>
+            </div>
+        }
+    </div>
     </div>
 </div>

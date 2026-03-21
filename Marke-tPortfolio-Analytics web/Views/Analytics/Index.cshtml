@@ -96,7 +96,7 @@
     <div class="kpi" style="--accent:var(--green)">
         <div class="kpi-label">Rendement annualisé</div>
         <div class="kpi-val @(a.AnnualizedReturn >= 0 ? "green" : "red")">
-            @(a.AnnualizedReturn >= 0 ? "+" : "")@((a.AnnualizedReturn * 100).ToString("F2"))%
+            @(a.AnnualizedReturn >= 0 ? "+" : "")@a.AnnualizedReturn.ToString("F2")%
         </div>
         @if (Model.InsightCagr != null)
         {
@@ -106,7 +106,7 @@
     </div>
     <div class="kpi" style="--accent:var(--amber)">
         <div class="kpi-label">Volatilité annualisée</div>
-        <div class="kpi-val amber">@((a.Volatility * 100).ToString("F2"))%</div>
+        <div class="kpi-val amber">@a.Volatility.ToString("F2")%</div>
         @if (Model.InsightVolatilite != null)
         {
             <div class="kpi-delta" style="color:@Model.InsightVolatilite.Couleur">@Model.InsightVolatilite.Niveau</div>
@@ -126,7 +126,7 @@
     </div>
     <div class="kpi" style="--accent:var(--red)">
         <div class="kpi-label">Max Drawdown</div>
-        <div class="kpi-val red">@((a.MaxDrawdown * 100).ToString("F2"))%</div>
+        <div class="kpi-val red">@a.MaxDrawdown.ToString("F2")%</div>
         @if (Model.InsightDrawdown != null)
         {
             <div class="kpi-delta" style="color:@Model.InsightDrawdown.Couleur">@Model.InsightDrawdown.Niveau</div>

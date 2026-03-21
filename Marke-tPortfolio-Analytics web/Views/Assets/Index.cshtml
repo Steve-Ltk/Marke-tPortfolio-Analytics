@@ -31,14 +31,18 @@
 <div id="importPanel" class="hidden" style="margin-bottom:20px">
     <div class="card" style="max-width:480px">
         <div class="card-title" style="margin-bottom:14px">Importer un actif depuis FMP</div>
-        <form asp-action="ImportFmp" asp-controller="Assets" method="post" style="display:flex;gap:10px">
+        <form asp-action="ImportFmp" asp-controller="Assets" method="post" style="display:flex;gap:10px;flex-wrap:wrap">
             @Html.AntiForgeryToken()
-            <input type="text" name="ticker" placeholder="Ex : AAPL, MC.PA, TSLA…"
+            <input type="text" name="ticker" placeholder="Ex : AAPL, MC.PA, TLT…"
                    class="form-control" style="flex:1" autocomplete="off" />
+            <select name="assetType" class="form-control" style="width:140px">
+                <option value="stock">Action</option>
+                <option value="bond">Obligation</option>
+            </select>
             <button type="submit" class="btn btn-green" style="white-space:nowrap">Importer →</button>
         </form>
         <div style="font-size:11.5px;color:var(--t4);margin-top:8px">
-            Entrez le ticker exact (NASDAQ, NYSE ou Euronext). Exemple : AAPL, MSFT, MC.PA, TTE.PA
+            Entrez le ticker exact (NASDAQ, NYSE ou Euronext). Exemple : AAPL, MSFT, MC.PA, TTE.PA, TLT
         </div>
     </div>
 </div>

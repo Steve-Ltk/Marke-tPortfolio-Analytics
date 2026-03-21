@@ -3,10 +3,9 @@
     var a = Model.Analyse!;
     var items = new (string Titre, Marke_tPortfolio_Analytics_web.Helpers.InsightHelper.InsightResult? Insight, string Valeur)[]
     {
-        ("Sharpe Ratio",    Model.InsightSharpe,     a.SharpeRatio.ToString("F3")),
-        ("Volatilité",      Model.InsightVolatilite, (a.Volatility * 100).ToString("F2") + "%"),
-        ("Max Drawdown",    Model.InsightDrawdown,   (a.MaxDrawdown * 100).ToString("F2") + "%"),
-        ("CAGR",            Model.InsightCagr,       (a.AnnualizedReturn * 100).ToString("F2") + "%"),
+        ("Volatilité", Model.InsightVolatilite, a.Volatility.ToString("F2") + "%"),
+        ("Max Drawdown", Model.InsightDrawdown, a.MaxDrawdown.ToString("F2") + "%"),
+        ("CAGR", Model.InsightCagr, a.AnnualizedReturn.ToString("F2") + "%"),
     };
 }
 

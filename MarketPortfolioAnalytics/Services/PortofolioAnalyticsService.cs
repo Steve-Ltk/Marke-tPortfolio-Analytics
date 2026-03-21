@@ -187,14 +187,86 @@ namespace MarketPortfolioAnalytics.Services
         /// Charge les prix de clôture pour une liste d'actifs sur une période.
         /// </summary>
         public async Task<List<AssetPrice>> LoadPricesAsync(
-            List<int> assetIds, DateTime from, DateTime to)
-            => await _context.AssetPrice
+    List<int> assetIds, DateTime from, DateTime to)
+        {
+            var prices = await _context.AssetPrice
                 .Where(ap => assetIds.Contains(ap.AssetId)
                           && ap.Date >= from.Date
                           && ap.Date <= to.Date)
                 .OrderBy(ap => ap.AssetId)
                 .ThenBy(ap => ap.Date)
                 .ToListAsync();
+
+            // ── Si pas assez de prix en base → fetch FMP ──────────────────────
+            var assetIdsWithPrices = prices.Select(p => p.AssetId).Distinct().ToList();
+            var assetIdsMissing = assetIds.Except(assetIdsWithPrices).ToList();
+
+            // Aussi les actifs qui ont moins de 5 jours de données
+            var assetIdsInsuffisant = assetIds
+                .Where(id => prices.Count(p => p.AssetId == id) < 5)
+                .ToList();
+
+            var toFetch = assetIdsMissing
+                .Union(assetIdsInsuffisant)
+                .Distinct()
+                .ToList();
+
+            if (toFetch.Any())
+            {
+                foreach (var assetId in toFetch)
+                {
+                    var asset = await _context.Asset.FindAsync(assetId);
+                    if (asset == null) continue;
+
+                    // Fetch FMP
+                    var fmpPrices = await _fmp.GetHistoricalPricesAsync(
+                        asset.Ticker, from, to);
+
+                    if (fmpPrices.Count == 0) continue;
+
+                    // Dates déjà en base pour cet actif sur cette période
+                    var existingDates = (await _context.AssetPrice
+                        .Where(ap => ap.AssetId == assetId
+                                  && ap.Date >= from.Date
+                                  && ap.Date <= to.Date)
+                        .Select(ap => ap.Date.Date)
+                        .ToListAsync())
+                        .ToHashSet();
+
+                    // Insérer uniquement les nouveaux
+                    var toInsert = fmpPrices
+                        .Where(p => !existingDates.Contains(p.Date.Date))
+                        .Select(p => new AssetPrice
+                        {
+                            AssetId = assetId,
+                            Date = p.Date.Date,
+                            Open = p.Open,
+                            High = p.High,
+                            Low = p.Low,
+                            Close = p.Close,
+                            Volume = p.Volume
+                        })
+                        .ToList();
+
+                    if (toInsert.Any())
+                    {
+                        _context.AssetPrice.AddRange(toInsert);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                // Recharger depuis la base avec les nouveaux prix
+                prices = await _context.AssetPrice
+                    .Where(ap => assetIds.Contains(ap.AssetId)
+                              && ap.Date >= from.Date
+                              && ap.Date <= to.Date)
+                    .OrderBy(ap => ap.AssetId)
+                    .ThenBy(ap => ap.Date)
+                    .ToListAsync();
+            }
+
+            return prices;
+        }
 
         /// <summary>
         /// Calcule les taux de change spot entre la devise de chaque actif

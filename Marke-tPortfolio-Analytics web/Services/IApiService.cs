@@ -45,11 +45,17 @@ namespace Marke_tPortfolio_Analytics_web.Services
         Task<Asset?> GetAssetByTickerAsync(string ticker);
         Task<Asset?> ImportStockFromFmpAsync(string ticker);
 
+        Task<Asset?> ImportBondFromFmpAsync(string ticker);
+
+        Task<bool> DeleteAssetAsync(int id);
+
         // ══════════════════════════════════════════════════════════════════════
         // PRIX & TAUX
         // ══════════════════════════════════════════════════════════════════════
-        Task<decimal?> GetLatestPriceAsync(string ticker);
+        Task<(decimal Price, decimal ChangePercent)> GetQuoteAsync(string ticker);
         Task<decimal> GetExchangeRateAsync(string from, string to);
+
+        Task<decimal?> GetLatestPriceAsync(string ticker);
 
         // ══════════════════════════════════════════════════════════════════════
         // ANALYTICS — vrais types des modèles backend

@@ -24,10 +24,9 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             foreach (var asset in assets)
             {
                 // Prix temps réel — null si FMP indisponible
-                var prix = await ApiService.GetLatestPriceAsync(asset.Ticker);
+                var (prixNatif, variation) = await ApiService.GetQuoteAsync(asset.Ticker);
                 bool isUsd = AssetHelper.IsUsd(asset);
 
-                decimal prixNatif = prix ?? 0m;
                 decimal prixEur = isUsd && tauxEurUsd > 0 ? prixNatif / tauxEurUsd : prixNatif;
                 decimal prixUsd = !isUsd && tauxEurUsd > 0 ? prixNatif * tauxEurUsd : prixNatif;
 
@@ -42,7 +41,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                     PrixNatif = Math.Round(prixNatif, 2),
                     PrixEur = Math.Round(prixEur, 2),
                     PrixUsd = Math.Round(prixUsd, 2),
-                    VariationJour = 0m  // Placeholder — FMP variation endpoint Phase 5
+                    VariationJour = Math.Round(variation, 2)
                 });
             }
 
@@ -64,14 +63,12 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             if (asset == null) return NotFound();
 
             var tauxEurUsd = await ApiService.GetExchangeRateAsync("EUR", "USD");
-            var prix = await ApiService.GetLatestPriceAsync(asset.Ticker);
+            var (prixNatif, variation) = await ApiService.GetQuoteAsync(asset.Ticker);
             bool isUsd = AssetHelper.IsUsd(asset);
 
-            decimal prixNatif = prix ?? 0m;
             decimal prixEur = isUsd && tauxEurUsd > 0 ? prixNatif / tauxEurUsd : prixNatif;
             decimal prixUsd = !isUsd && tauxEurUsd > 0 ? prixNatif * tauxEurUsd : prixNatif;
 
-            // Portefeuilles de l'utilisateur qui détiennent cet actif
             int userId = GetUserId() ?? 0;
             var portfolios = await ApiService.GetPortfoliosByUserAsync(userId);
             var portosAvecActif = new List<string>();
@@ -90,7 +87,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 PrixActuel = Math.Round(prixNatif, 2),
                 PrixEur = Math.Round(prixEur, 2),
                 PrixUsd = Math.Round(prixUsd, 2),
-                VariationJour = 0m,
+                VariationJour = Math.Round(variation, 2),
                 TauxEurUsd = tauxEurUsd,
                 PortefeuillesDetenant = portosAvecActif
             });
@@ -99,7 +96,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         // ── IMPORT DEPUIS FMP ─────────────────────────────────────────────────
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> ImportFmp(string ticker)
+        public async Task<IActionResult> ImportFmp(string ticker, string assetType = "stock")
         {
             if (string.IsNullOrWhiteSpace(ticker))
             {
@@ -107,15 +104,59 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var asset = await ApiService.ImportStockFromFmpAsync(ticker.Trim().ToUpper());
-            if (asset == null)
+            string t = ticker.Trim().ToUpper();
+            Asset? asset = null;
+
+            if (assetType == "bond")
             {
-                SetError($"Impossible d'importer « {ticker.ToUpper()} ». Vérifiez que le ticker est valide sur FMP.");
-                return RedirectToAction(nameof(Index));
+                asset = await ApiService.ImportBondFromFmpAsync(t);
+
+                if (asset == null)
+                {
+                    // Fallback : FMP n'a pas trouvé comme obligation
+                    // → on essaie comme action
+                    asset = await ApiService.ImportStockFromFmpAsync(t);
+
+                    if (asset != null)
+                        SetSuccess($"« {t} » importé comme action (pas trouvé comme obligation).");
+                    else
+                    {
+                        SetError($"Impossible d'importer « {t} ». Vérifiez le ticker sur FMP.");
+                        return RedirectToAction(nameof(Index));
+                    }
+                }
+                else
+                {
+                    SetSuccess($"Obligation « {asset.Ticker} — {asset.Name} » importée !");
+                }
+            }
+            else
+            {
+                asset = await ApiService.ImportStockFromFmpAsync(t);
+
+                if (asset == null)
+                {
+                    SetError($"Impossible d'importer « {t} ». Vérifiez le ticker sur FMP.");
+                    return RedirectToAction(nameof(Index));
+                }
+
+                SetSuccess($"Action « {asset.Ticker} — {asset.Name} » importée !");
             }
 
-            SetSuccess($"Actif « {asset.Ticker} — {asset.Name} » importé avec succès !");
             return RedirectToAction(nameof(Details), new { id = asset.Id });
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var ok = await ApiService.DeleteAssetAsync(id);
+            if (!ok)
+            {
+                SetError("Suppression impossible. L'actif est peut-être utilisé dans un portefeuille.");
+                return RedirectToAction(nameof(Details), new { id });
+            }
+            SetSuccess("Actif supprimé.");
+            return RedirectToAction(nameof(Index));
         }
     }
 }

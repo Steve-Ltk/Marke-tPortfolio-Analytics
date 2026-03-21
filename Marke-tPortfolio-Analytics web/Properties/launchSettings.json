@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "Marke-tPortfolio-Analytics web": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5299",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "http://localhost:5299",
+      "nativeDebugging": false
+    }
+  }
+}

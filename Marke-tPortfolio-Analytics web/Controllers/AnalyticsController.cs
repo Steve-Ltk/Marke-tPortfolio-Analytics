@@ -49,9 +49,9 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                     var a = vm.Analyse;
                     // ✅ Utilise les vrais champs : Volatility (pas AnnualizedVolatility)
                     vm.InsightSharpe = InsightHelper.Sharpe(a.SharpeRatio);
-                    vm.InsightVolatilite = InsightHelper.Volatilite(a.Volatility * 100);
-                    vm.InsightDrawdown = InsightHelper.MaxDrawdown(a.MaxDrawdown * 100);
-                    vm.InsightCagr = InsightHelper.Cagr(a.AnnualizedReturn * 100);
+                    vm.InsightVolatilite = InsightHelper.Volatilite(a.Volatility);
+                    vm.InsightDrawdown = InsightHelper.MaxDrawdown(a.MaxDrawdown);
+                    vm.InsightCagr = InsightHelper.Cagr(a.AnnualizedReturn);
 
                     var niveaux = new[]
                     {
