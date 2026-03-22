@@ -6,7 +6,7 @@
 
 <div class="mpa-auth-body">
 
-    <!-- ── Panneau gauche ─────────────────────────────────── -->
+    <! Panneau gauche >
     <div class="auth-left">
         <div>
             <div class="auth-logo">
@@ -24,35 +24,32 @@
             <h1 class="auth-headline">
                 Investissez
                 <span class="auth-accent">comme un hedge<br>fund.</span>
-                <span class="auth-light">Gratuitement.</span>
+                <span class="auth-light">Ici.</span>
             </h1>
             <p class="auth-subline">Stop guessing. Start optimizing.</p>
 
             <p class="auth-body-copy">
-                Analyse quantitative, optimisation Markowitz et Monte Carlo —
+                Analyse quantitative, optimisation Markowitz et Monte Carlo, 
                 <strong>les outils des professionnels</strong>, enfin accessibles à tous.
             </p>
 
             <div class="auth-features">
                 <div class="auth-feat">
-                    <div class="auth-feat-icon">📊</div>
                     <div class="auth-feat-text">
                         <strong>Analytics institutionnels</strong>
                         <span>Sharpe, Alpha, VaR, Max Drawdown en temps réel</span>
                     </div>
                 </div>
                 <div class="auth-feat">
-                    <div class="auth-feat-icon">🎯</div>
                     <div class="auth-feat-text">
                         <strong>Optimisation de portefeuille</strong>
                         <span>Frontière efficiente de Markowitz automatisée</span>
                     </div>
                 </div>
                 <div class="auth-feat">
-                    <div class="auth-feat-icon">🔮</div>
                     <div class="auth-feat-text">
                         <strong>Monte Carlo · 10 000 scénarios</strong>
-                        <span>Simulez votre avenir financier sur 1 à 30 ans</span>
+                        <span>Ayez une idée de votre avenir financier sur 1 à 30 ans</span>
                     </div>
                 </div>
             </div>
@@ -77,7 +74,6 @@
             </div>
         </div>
 
-        <!-- Ticker tape -->
         <div class="auth-ticker">
             <div class="ticker-track">
                 <span class="tick-item"><span class="tick-sym">AAPL</span><span class="tick-up">▲ 1.24%</span></span>
@@ -100,17 +96,17 @@
         </div>
     </div>
 
-    <!-- ── Panneau droit ──────────────────────────────────── -->
+    <! Panneau droit >
     <div class="auth-right">
         <div class="auth-form-wrap">
 
-            <!-- Tabs -->
+            @* Tabs Connexion / Inscription -> simples liens href *@
             <div class="auth-tabs">
                 <a href="/Auth/Login" class="auth-tab active">Connexion</a>
                 <a href="/Auth/Register" class="auth-tab">Inscription</a>
             </div>
 
-            <h2 class="auth-form-title">Bon retour 👋</h2>
+            <h2 class="auth-form-title">Bon retour parmis nous</h2>
             <p class="auth-form-sub">Connectez-vous pour accéder à votre portefeuille.</p>
 
             <!-- Alerts -->
@@ -130,7 +126,7 @@
                     <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">✕</button>
                 </div>
             }
-
+            
             <form asp-action="Login" asp-controller="Auth" method="post" id="loginForm">
                 @Html.AntiForgeryToken()
 
@@ -143,6 +139,7 @@
                             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                             <polyline points="22,6 12,13 2,6" />
                         </svg>
+                        @* asp-validation-for -> affiche les erreurs [EmailAddress] du ViewModel *@
                         <input asp-for="Email" class="form-control @(ViewData.ModelState["Email"]?.Errors.Count > 0 ? "is-invalid" : "")"
                                type="email" placeholder="jean.dupont@email.com"
                                style="padding-left:42px" autocomplete="email" />
@@ -163,6 +160,7 @@
                                class="form-control @(ViewData.ModelState["Password"]?.Errors.Count > 0 ? "is-invalid" : "")"
                                type="password" placeholder="••••••••"
                                style="padding-left:42px;padding-right:46px" autocomplete="current-password" />
+                                @* Bouton oeil -> toggle visibilité mot de passe *@
                         <button type="button" id="togglePwd"
                                 style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#475569;padding:4px;transition:color .15s"
                                 onmouseover="this.style.color='#94a3b8'" onmouseout="this.style.color='#475569'">
@@ -184,6 +182,7 @@
                 <button type="submit" class="btn-auth-submit" id="submitBtn">
                     <span id="submitText">Accéder à mon portefeuille</span>
                     <span class="btn-auth-arrow">→</span>
+                    @* Spinner affiché pendant la soumission -> remplace le texte *@
                     <svg id="submitSpinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;animation:spin .7s linear infinite">
                         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
@@ -214,14 +213,15 @@
 
 @section Scripts {
     <script>
-        // Toggle password visibility
+        // Toggle visibilité mot de passe
         document.getElementById('togglePwd').addEventListener('click', function () {
           const input = document.getElementById('passwordInput');
+          // Bascule entre "password" (masqué) et "text" (visible)
           input.type = input.type === 'password' ? 'text' : 'password';
           this.style.opacity = input.type === 'text' ? '1' : '.6';
         });
 
-        // Submit spinner
+        // Spinner pendant la soumission -> désactive le bouton pour éviter double-clic
         document.getElementById('loginForm').addEventListener('submit', function () {
           const btn = document.getElementById('submitBtn');
           document.getElementById('submitText').textContent = 'Connexion…';
