@@ -10,7 +10,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         public ProfileController(IApiService api, ILogger<ProfileController> logger)
             : base(api, logger) { }
 
-        // ── Index ─────────────────────────────────────────────────────────
+        // Index 
 
         [HttpGet]
         public async Task<IActionResult> Index()
@@ -53,7 +53,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             });
         }
 
-        // ── Update infos ──────────────────────────────────────────────────
+        // Update infos 
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Update(ProfileViewModel model)
@@ -77,7 +77,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // ── Change password ───────────────────────────────────────────────
+        // Change password 
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> ChangePassword(
