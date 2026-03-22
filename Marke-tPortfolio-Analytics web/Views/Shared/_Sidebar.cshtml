@@ -1,14 +1,19 @@
-﻿@{
+@* Sidebar de navigation principale.
+   Détecte le controller actif via RouteData pour surligner le bon lien. *@
+@{
     var ctrl = ViewContext.RouteData.Values["controller"]?.ToString();
 }
 <aside class="mpa-sidebar" id="sidebar">
 
+    @* Logo Catalis en haut de la sidebar *@
     <div class="sb-logo">
         <div class="sb-logo-icon"></div>
         <span class="sb-logo-name">Catalis</span>
     </div>
 
     <nav class="sb-nav">
+         @* Chaque lien ajoute la classe "active" si le controller correspond *@
+        @* "active" -> surlignage vert dans le CSS *@
         <a class="sb-item @(ctrl == "Dashboard" ? "active" : "")" href="/Dashboard">
             <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="7" height="7" />
@@ -33,7 +38,10 @@
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>Analytics
         </a>
+
+        @* Séparateur visuel entre navigation principale et outils secondaires *@
         <div class="sb-divider"></div>
+
         <a class="sb-item @(ctrl == "Goal" ? "active" : "")" href="/Goal/Wizard?step=1">
             <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10" />
@@ -41,6 +49,7 @@
                 <circle cx="12" cy="12" r="2" />
             </svg>Mon Objectif
         </a>
+
         <a class="sb-item @(ctrl == "Profile" ? "active" : "")" href="/Profile">
             <svg class="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -49,9 +58,12 @@
         </a>
     </nav>
 
-    <div class="sb-footer">
+    
+      @* Pied de sidebar : info utilisateur + déconnexion *@
+      <div class="sb-footer">
         <div class="sb-user-chip">
             <div class="sb-avatar">
+                @* Initiale du nom -> Context.Session lit directement la session ASP.NET *@
                 @(Context.Session.GetString("UserName")?.Substring(0, 1).ToUpper() ?? "?")
             </div>
             <div style="min-width:0">
@@ -68,4 +80,7 @@
         </a>
     </div>
 </aside>
+
+@* Overlay sombre sur mobile quand la sidebar est ouverte *@
+@* onclick -> ferme la sidebar quand l'user clique en dehors *@
 <div class="sb-overlay" id="sbOverlay" onclick="document.getElementById('sidebar').classList.remove('open');this.classList.remove('open')"></div>
