@@ -2,14 +2,15 @@
 
 namespace Marke_tPortfolio_Analytics_web.Helpers
 {
-    /// <summary>
-    /// Utilitaires pour les actifs.
-    /// Asset.AssetType n'est PAS une propriété C# — c'est un discriminateur JSON.
-    /// On utilise le pattern matching is Stock / is Bond pour identifier le type réel.
-    /// </summary>
+    // Utilitaires statiques pour les actifs — utilisés dans tous les controllers MVC frontend.
+    // "static" → pas besoin d'instance, on appelle directement AssetHelper.IsUsd(asset).
+    // Centralisé ici pour éviter de répéter la même logique partout
     public static class AssetHelper
     {
-        /// <summary>Retourne "Stock" ou "Bond" selon le type C# réel de l'objet.</summary>
+        // Retourne "Stock" ou "Bond" selon le vrai type C# de l'objet
+        // Utilise le pattern matching "is" -> vérifie le type réel à l'exécution
+        // Asset est polymorphique -> un objet peut être Stock ou Bond derrière une référence Asset
+        // "switch expression" -> syntaxe moderne équivalente à if/else if/else
         public static string GetTypeLabel(Asset? asset) => asset switch
         {
             Bond => "Bond",
@@ -17,13 +18,14 @@ namespace Marke_tPortfolio_Analytics_web.Helpers
             _ => "Stock"
         };
 
-        /// <summary>
-        /// Retourne true si l'actif est coté en USD.
-        /// Priorité au champ Currency, sinon heuristique sur le ticker.
-        /// </summary>
+        // Priorité 1 : Currency renseigné -> on vérifie directement
+        // StringComparison.OrdinalIgnoreCase -> "USD" = "usd" = "Usd"
         public static bool IsUsd(Asset? asset)
         {
+            // Actif null -> on suppose USD par défaut (actifs US majoritaires)
             if (asset == null) return true;
+            // Priorité 1 : Currency renseigné -> on vérifie directement
+            // StringComparison.OrdinalIgnoreCase -> "USD" = "usd" = "Usd"
             if (!string.IsNullOrEmpty(asset.Currency))
                 return string.Equals(asset.Currency, "USD",
                     StringComparison.OrdinalIgnoreCase);
