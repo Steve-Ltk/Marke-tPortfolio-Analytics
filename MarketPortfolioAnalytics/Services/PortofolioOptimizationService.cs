@@ -9,6 +9,7 @@ namespace MarketPortfolioAnalytics.Services
     // Génère NumPortfolios allocations aléatoires et retourne la meilleure
     // selon la cible : MaxSharpe, MinVolatility, ou MaxReturn
     // Nécessite au moins 2 actifs avec 30 jours de données chacun
+    // Ressource: Claude IA 
     public class PortfolioOptimizationService
     {
         private readonly MarketPortfolioAnalyticsContext _context;
