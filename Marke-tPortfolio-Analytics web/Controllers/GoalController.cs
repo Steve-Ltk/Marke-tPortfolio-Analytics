@@ -115,18 +115,22 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return View(vm);
         }
 
-        [HttpPost, ValidateAntiForgeryToken]
+        
+        template.Nom, "EUR", userId);
+
+    [HttpPost, ValidateAntiForgeryToken]
 public async Task<IActionResult> CreateFromGoal(int scoreRisque)
 {
     var template = GoalTemplates.GetTemplate(scoreRisque);
     int userId   = GetUserId() ?? 0;
 
     // Récupère le capital depuis TempData
+    // Si absent → 10 000€ par défaut
     decimal capital = decimal.TryParse(
         TempData.Peek("Goal_CapitalInitial") as string,
         out var c) ? c : 10000m;
 
-    // 1. Crée le portefeuille
+    // 1. Crée le portefeuille vide en EUR
     var portfolio = await ApiService.CreatePortfolioAsync(
         template.Nom, "EUR", userId);
 
@@ -136,26 +140,31 @@ public async Task<IActionResult> CreateFromGoal(int scoreRisque)
         return RedirectToAction(nameof(Result));
     }
 
-    // 2. Récupère le taux EUR/USD une seule fois
-    // Utilisé pour convertir les prix USD en EUR avant de calculer les quantités
+    // 2. Récupère le taux EUR/USD une seule fois pour toute la boucle
+    // Évite N appels FMP → un seul appel pour tous les actifs USD
     decimal tauxEurUsd = await ApiService.GetExchangeRateAsync("EUR", "USD");
-    if (tauxEurUsd <= 0) tauxEurUsd = 1m; // fallback neutre
 
-    int positionsCreees = 0;
+    // Fallback neutre si FMP ne répond pas → pas de conversion
+    if (tauxEurUsd <= 0) tauxEurUsd = 1m;
 
+    int positionsCreees  = 0;
+    decimal totalInvesti = 0m; // total réellement investi en EUR
+
+    // 3. Pour chaque actif du template → importe + calcule quantité + crée position
     foreach (var alloc in template.Allocation)
     {
         // Vérifie si l'actif existe déjà en base
         var asset = await ApiService.GetAssetByTickerAsync(alloc.Ticker);
 
-        // Sinon l'importe depuis FMP
+        // Sinon l'importe depuis FMP automatiquement
         if (asset == null)
             asset = await ApiService.ImportStockFromFmpAsync(alloc.Ticker);
 
-        // Import échoué → on passe au suivant sans planter
+        // Import échoué → on passe au suivant sans planter toute la création
         if (asset == null)
         {
-            Logger.LogWarning("CreateFromGoal : impossible d'importer {Ticker}",
+            Logger.LogWarning(
+                "CreateFromGoal : impossible d'importer {Ticker}",
                 alloc.Ticker);
             continue;
         }
@@ -163,98 +172,105 @@ public async Task<IActionResult> CreateFromGoal(int scoreRisque)
         // Récupère le prix actuel en devise native (USD ou EUR)
         var (prixNatif, _) = await ApiService.GetQuoteAsync(asset.Ticker);
 
-        // FMP ne répond pas → on saute cet actif
-        // On ne peut pas calculer une quantité sans prix
+        // Prix indisponible → on ne peut pas calculer de quantité → on saute
         if (prixNatif <= 0)
         {
-            Logger.LogWarning("CreateFromGoal : prix indisponible pour {Ticker}",
+            Logger.LogWarning(
+                "CreateFromGoal : prix indisponible pour {Ticker}",
                 alloc.Ticker);
             continue;
         }
 
         // Détermine si l'actif est en USD ou EUR
-        // IsUsd → true si ticker sans point (AAPL, JNJ) → USD
-        //       → false si ticker avec point (OR.PA, TTE.PA) → EUR
+        // Ticker sans point → USD (AAPL, JNJ, MSFT...)
+        // Ticker avec point → EUR (OR.PA, TTE.PA...)
         bool isUsd = !alloc.Ticker.Contains('.');
 
-        // Convertit le prix en EUR pour le calcul des quantités
-        // Si USD → divise par le taux EUR/USD
-        // Si EUR → prix déjà en EUR
+        // Convertit le prix en EUR pour calculer les quantités
+        // Tous les calculs de répartition se font en EUR
         decimal prixEnEur = isUsd && tauxEurUsd > 0
             ? prixNatif / tauxEurUsd
             : prixNatif;
 
-        // Calcule le montant alloué à cet actif
-        // Ex : capital=10000€, poids=30% -> montant=3000€
+        // Montant alloué à cet actif selon son poids dans le template
+        // Ex : capital=10 000€, poids=30% → montant=3 000€
         decimal montantAlloue = capital * (alloc.Poids / 100m);
 
-        // Calcule la quantité
-        // Ex : montant=3000€, prix=175€ -> quantité=17.14 unités
-        decimal quantite = prixEnEur > 0
-            ? Math.Round(montantAlloue / prixEnEur, 4)
-            : 0m;
+        decimal quantite;
 
-        // Quantité nulle -> pas de sens de créer la position
-        if (quantite <= 0)
+        // Ajustement 2 — capital insuffisant pour acheter 1 unité au poids cible
+        // → on crée quand même la position avec 1 unité symbolique
+        // → plutôt que de sauter l'actif et fausser la diversification
+        if (montantAlloue < prixEnEur)
         {
-            Logger.LogWarning("CreateFromGoal : quantité nulle pour {Ticker}",
-                alloc.Ticker);
-            continue;
+            quantite = 1m;
+            Logger.LogWarning(
+                "CreateFromGoal : capital insuffisant pour {Ticker} " +
+                "({Montant}€ < {Prix}€) → 1 unité symbolique",
+                alloc.Ticker,
+                Math.Round(montantAlloue, 2),
+                Math.Round(prixEnEur, 2));
+        }
+        else
+        {
+            // Ajustement 1 — arrondi à 2 décimales
+            // Ex : 3 000 / 217.6 = 13.78 actions
+            // Plus réaliste qu'à 4 décimales (13.7800)
+            quantite = Math.Round(montantAlloue / prixEnEur, 2);
         }
 
-        // Crée la position avec la quantité calculée
-        // avgBuyPrice = prix en devise NATIVE (USD ou EUR selon l'actif)
-        // C'est la convention de tout le projet
+        // Sécurité → quantité nulle ou négative ne doit jamais arriver
+        if (quantite <= 0) continue;
+
+        // Crée la position en base
+        // avgBuyPrice = prix NATIF (USD ou EUR selon l'actif) → convention du projet
+        // On ne stocke jamais les prix convertis en base
         var position = await ApiService.CreatePositionAsync(
             portfolio.Id,
             asset.Id,
-            quantity:     quantite,
-            avgBuyPrice:  prixNatif,  // prix natif → pas converti
-            buyDate:      DateTime.Today
+            quantity:    quantite,
+            avgBuyPrice: prixNatif,
+            buyDate:     DateTime.Today
         );
 
         if (position != null)
+        {
             positionsCreees++;
+            // Ajustement 3 — accumule le total réellement investi en EUR
+            // quantite × prixEnEur = valeur réelle de la position en EUR
+            totalInvesti += quantite * prixEnEur;
+        }
     }
 
-    // Message selon le résultat
+    // 4. Message final selon le résultat de la création
     if (positionsCreees == template.Allocation.Count)
     {
+        // Toutes les positions créées → succès complet
         SetSuccess(
-            $"Portefeuille « {template.Nom} » créé avec {positionsCreees} positions " +
-            $"pour un capital de €{capital:N0}. " +
+            $"Portefeuille « {template.Nom} » créé — " +
+            $"€{totalInvesti:N0} investis sur €{capital:N0} de capital. " +
             $"Vous pouvez ajuster les quantités à tout moment.");
     }
     else if (positionsCreees > 0)
     {
+        // Certaines positions échouées → succès partiel
         SetWarning(
-            $"Portefeuille créé avec {positionsCreees}/{template.Allocation.Count} positions. " +
+            $"Portefeuille créé avec {positionsCreees}/{template.Allocation.Count} positions " +
+            $"(€{totalInvesti:N0} investis sur €{capital:N0}). " +
             $"Certains actifs n'ont pas pu être importés depuis FMP.");
     }
     else
     {
+        // Aucune position créée → portefeuille vide
         SetWarning(
             $"Portefeuille « {template.Nom} » créé mais vide. " +
-            $"FMP n'a pas répondu. Ajoutez les positions manuellement.");
+            $"FMP n'a pas répondu pour tous les actifs. " +
+            $"Ajoutez les positions manuellement.");
     }
 
+    // Redirige vers le détail du portefeuille créé
     return RedirectToAction("Details", "Portfolios", new { id = portfolio.Id });
 }
-
-        // Lit les données du wizard depuis TempData
-        // TempData.Peek -> lit sans effacer (contrairement à TempData[key])
-        // Retourne false si l'objectif manque -> wizard pas complété
-        private bool TryGetWizardData(
-            out string objectif, out int score, out int horizon, out decimal capital)
-        {
-            objectif = TempData.Peek("Goal_Objectif") as string ?? string.Empty;
-            score = TempData.Peek("Goal_ScoreRisque") is int s ? s : 5;
-            horizon = TempData.Peek("Goal_HorizonAns") is int h ? h : 10;
-            capital = decimal.TryParse(
-                           TempData.Peek("Goal_CapitalInitial") as string,
-                           out var c) ? c : 10000m;
-            return !string.IsNullOrEmpty(objectif);
-        }
 
         // Simule l'évolution du capital avec une formule log-normale simplifiée
         // Plus rapide que Monte Carlo complet -> suffisant pour l'estimation du wizard
