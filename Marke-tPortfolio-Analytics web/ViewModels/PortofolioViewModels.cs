@@ -3,10 +3,7 @@ using MarketPortfolioAnalytics.Models;
 
 namespace Marke_tPortfolio_Analytics_web.ViewModels
 {
-    // ════════════════════════════════════════════════════════════════════
-    // LISTE
-    // ════════════════════════════════════════════════════════════════════
-
+     // ViewModel de la liste des portefeuilles
     public class PortfolioIndexViewModel
     {
         public List<PortfolioCard> Portfolios { get; set; } = new();
@@ -14,6 +11,7 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         public bool HasPortfolios => Portfolios.Any();
     }
 
+    // Une carte portefeuille dans la liste
     public class PortfolioCard
     {
         public Portfolio Portfolio { get; set; } = null!;
@@ -21,14 +19,12 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         public decimal RendementPct { get; set; }
         public int NbPositions { get; set; }
 
+        // Couleur et signe du rendement -> vert si positif, rouge si négatif
         public string RendementCouleur => RendementPct >= 0 ? "var(--green)" : "var(--red)";
         public string RendementSigne => RendementPct >= 0 ? "▲" : "▼";
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // DÉTAIL
-    // ════════════════════════════════════════════════════════════════════
-
+    // ViewModel du détail d'un portefeuille avec ses positions
     public class PortfolioDetailsViewModel
     {
         public Portfolio Portfolio { get; set; } = null!;
@@ -38,6 +34,8 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         public bool HasPositions => Positions.Any();
     }
 
+     // Détail d'une position dans un portefeuille
+    // Enrichit Position avec les données calculées (valeur, P&L, poids...)
     public class PositionDetail
     {
         public Position Position { get; set; } = null!;
@@ -51,14 +49,12 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         public decimal Poids { get; set; }
         public string Devise { get; set; } = "USD";
 
+        // Couleur et signe du P&L -> vert si gain, rouge si perte
         public string PnlCouleur => PnlPct >= 0 ? "var(--green)" : "var(--red)";
         public string PnlSigne => PnlPct >= 0 ? "+" : "";
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // CRÉATION — sans Description (Portfolio n'a pas ce champ)
-    // ════════════════════════════════════════════════════════════════════
-
+    // ViewModel du formulaire de création de portefeuille
     public class PortfolioCreateViewModel
     {
         [Required(ErrorMessage = "Le nom est obligatoire.")]
@@ -66,15 +62,13 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Nom du portefeuille")]
         public string Name { get; set; } = string.Empty;
 
+        // Fixé à EUR en V1 -> l'user ne choisit plus la devise
         [Required]
         [Display(Name = "Devise de référence")]
         public string Currency { get; set; } = "EUR";
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // ÉDITION — sans Description
-    // ════════════════════════════════════════════════════════════════════
-
+   // ViewModel du formulaire de modification de portefeuille
     public class PortfolioEditViewModel
     {
         public int Id { get; set; }
@@ -84,6 +78,7 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Nom du portefeuille")]
         public string Name { get; set; } = string.Empty;
 
+        // Fixé à EUR en V1 -> même logique que PortfolioCreateViewModel
         [Required]
         [Display(Name = "Devise de référence")]
         public string Currency { get; set; } = "EUR";
