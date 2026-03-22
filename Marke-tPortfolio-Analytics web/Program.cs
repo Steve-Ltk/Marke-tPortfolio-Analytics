@@ -24,8 +24,7 @@ builder.Services.AddSession(options =>
     options.IdleTimeout = TimeSpan.FromMinutes(120); // session expire après 2h d'inactivité
     options.Cookie.HttpOnly = true;   // cookie inaccessible depuis JavaScript -> sécurité XSS
     options.Cookie.IsEssential = true;   // pas bloqué par le consentement RGPD
-    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax; // protège contre attaque CSRF (Requête externe)
 });
 
 // HttpClient nommé "ApiClient" -> utilisé par ApiService via IHttpClientFactory
