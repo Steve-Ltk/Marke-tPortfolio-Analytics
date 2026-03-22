@@ -1,8 +1,17 @@
-﻿@using Marke_tPortfolio_Analytics_web
+@* Importations globales appliquées à TOUTES les vues Razor du projet.
+   Évite de répéter les "using" dans chaque fichier .cshtml *@
+@* Namespaces C# accessibles dans toutes les vues sans préfixe *@
+@using Marke_tPortfolio_Analytics_web
 @using Marke_tPortfolio_Analytics_web.Models
 @using Marke_tPortfolio_Analytics_web.ViewModels
 @using Marke_tPortfolio_Analytics_web.Helpers
 @using MarketPortfolioAnalytics.Models
+
+@* "using static" -> accès direct aux membres statiques sans préfixe de classe *@
+@* Permet d'écrire InsightResult au lieu de InsightHelper.InsightResult dans les vues *@
 @using static Marke_tPortfolio_Analytics_web.Helpers.InsightHelper
 @using static Marke_tPortfolio_Analytics_web.Helpers.GoalTemplates
+
+@* Active les Tag Helpers ASP.NET (asp-action, asp-controller, asp-for...) *@
+@* Sans cette ligne : asp-action ne serait pas reconnu -> les formulaires ne fonctionneraient pas *@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
