@@ -184,7 +184,7 @@ public async Task<IActionResult> CreateFromGoal(int scoreRisque)
         // Détermine si l'actif est en USD ou EUR
         // Ticker sans point → USD (AAPL, JNJ, MSFT...)
         // Ticker avec point → EUR (OR.PA, TTE.PA...)
-        bool isUsd = !alloc.Ticker.Contains('.');
+        bool isUsd = AssetHelper.IsUsd(asset);
 
         // Convertit le prix en EUR pour calculer les quantités
         // Tous les calculs de répartition se font en EUR
