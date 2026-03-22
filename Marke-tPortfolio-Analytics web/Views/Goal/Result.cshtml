@@ -124,6 +124,7 @@
         <form asp-action="CreateFromGoal" asp-controller="Goal" method="post">
             @Html.AntiForgeryToken()
             <input type="hidden" name="scoreRisque" value="@Model.ScoreRisque" />
+            <input type="hidden" name="capitalInitial" value="@Model.CapitalInitial" />
             <button type="submit" class="btn btn-green btn-full btn-lg">
                 Créer ce portefeuille →
             </button>
