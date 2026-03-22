@@ -183,7 +183,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return View(vm);
         }
 
-        // ── Sharpe et MaxDrawdown pondérés depuis le backend ──────────────────
+        // Sharpe et MaxDrawdown pondérés depuis le backend
         // Pour chaque portefeuille, on appelle l'API Analytics sur 1 an.
         // On pondère Sharpe et MaxDrawdown par la valeur de marché de chaque
         // portefeuille, pour obtenir des métriques globales cohérentes.
@@ -195,6 +195,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             List<MarketPortfolioAnalytics.Models.Portfolio> portfolios,
             decimal valeurTotale)
         {
+            // Rien à calculer si pas de valeur ou pas de portefeuilles
             if (valeurTotale <= 0 || !portfolios.Any())
             {
                 vm.SharpeRatio = 0;
@@ -203,7 +204,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             }
 
             var dateFin = DateTime.UtcNow;
-            var dateDebut = dateFin.AddYears(-1);
+            var dateDebut = dateFin.AddYears(-1); // analyse sur 1 an glissant
 
             double sharpeePondere = 0;
             double maxDrawdownPondere = 0;
@@ -213,21 +214,24 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             {
                 try
                 {
+                    // Appelle le backend Analytics pour ce portefeuille
                     var analyse = await ApiService.AnalyzePortfolioAsync(
                         portfolio.Id, dateDebut, dateFin, riskFreeRate: 0.03);
 
                     if (analyse == null) continue;
 
-                    // Valeur du portefeuille comme poids
+                    // Valeur du portefeuille -> utilisée comme poids dans la moyenne
                     decimal poidsPortfolio = analyse.TotalCurrentValue;
                     if (poidsPortfolio <= 0) continue;
 
+                    // Accumule les métriques pondérées par valeur de marché
                     sharpeePondere += analyse.SharpeRatio * (double)poidsPortfolio;
                     maxDrawdownPondere += analyse.MaxDrawdown * (double)poidsPortfolio;
                     valeurAnalysee += poidsPortfolio;
                 }
                 catch (Exception ex)
                 {
+                    // Si un portefeuille plante -> on l'ignore et on continue
                     Logger.LogWarning(ex,
                         "Impossible de charger les métriques analytiques pour le portefeuille {Id}",
                         portfolio.Id);
@@ -236,7 +240,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
 
             if (valeurAnalysee > 0)
             {
-                // Moyenne pondérée par valeur de marché
+                // Moyenne pondérée = somme(métrique × poids) / somme(poids)
                 vm.SharpeRatio = Math.Round(
                     (decimal)(sharpeePondere / (double)valeurAnalysee), 2);
                 vm.MaxDrawdown = Math.Round(
