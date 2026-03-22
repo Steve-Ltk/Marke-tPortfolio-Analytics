@@ -22,7 +22,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             int? portfolioId = null,
             string? dateDebut = null,
             string? dateFin = null,
-            double riskFree = 3.0)
+            double riskFree = 4.5)
         {
             int userId = GetUserId() ?? 0;
             var portfolios = await ApiService.GetPortfoliosByUserAsync(userId);
@@ -166,7 +166,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                     From = from,        
                     To = to,          
                     BenchmarkTicker = benchmark,
-                    RiskFreeRate = 0.03,
+                    RiskFreeRate = 0.045,
                     Rebalancing = RebalancingFrequency.BuyAndHold
                 });
 
@@ -192,7 +192,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return Json(new
             {
                 portfolioReturn = Math.Round(result.TotalReturnPct, 2),
-                sortino = Math.Round(result.SortinoRatio, 3), // ✅
+                sortino = Math.Round(result.SortinoRatio, 3), 
                 benchmarkReturn = Math.Round(result.BenchmarkReturnPct ?? 0, 2),
                 alpha = Math.Round(result.Alpha, 2),                 
                 beta = Math.Round(result.Beta, 3),                
@@ -234,7 +234,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                     From = from,
                     To = to,
                     Target = targetEnum,  
-                    RiskFreeRate = 0.03,
+                    RiskFreeRate = 0.045,
                     NumPortfolios = 500
                 });
 
@@ -290,7 +290,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 PortfolioIds = portfolioIds,
                 From = from,
                 To = to,
-                RiskFreeRate = 0.03
+                RiskFreeRate = 0.045
             });
 
             if (result == null)
