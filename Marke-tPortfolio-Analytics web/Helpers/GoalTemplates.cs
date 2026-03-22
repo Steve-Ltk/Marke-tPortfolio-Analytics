@@ -44,7 +44,7 @@
             Description: "Allocation défensive visant la préservation du capital avec une volatilité minimale.",
             Profil: "Défensif",
             ClasseRisque: "Faible",
-            Couleur: "var(--blue)"
+            Couleur: "var(--blue)",
             ScoreMin: 0, ScoreMax: 3, 
             CagrEstime: 4.5m, VolatiliteEstimee: 6m,
             Positionnement: "Préservation du capital",
@@ -74,7 +74,7 @@
                 new("AAPL",   20m, "#00d084"),
                 new("OR.PA",  15m, "#8b5cf6"),
                 new("TTE.PA", 15m, "#f59e0b"),
-                new("JNJ",    50m, "#94a3b8"),
+                new("JNJ",    25m, "#94a3b8"),
             }
         );
 
