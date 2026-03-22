@@ -1,3 +1,6 @@
-﻿@{
+@* Exécuté AVANT chaque vue Razor.
+   Définit le layout par défaut -> toutes les vues utilisent _Layout.cshtml
+   sauf celles qui déclarent Layout = "_LayoutAuth" ou Layout = null. *@
+@{
     Layout = "_Layout";
 }
