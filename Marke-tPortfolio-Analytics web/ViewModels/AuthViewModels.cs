@@ -2,10 +2,7 @@
 
 namespace Marke_tPortfolio_Analytics_web.ViewModels
 {
-    // ══════════════════════════════════════════════════════════════════════
-    // LOGIN
-    // ══════════════════════════════════════════════════════════════════════
-
+    // ViewModel du formulaire de connexion
     public class LoginViewModel
     {
         [Required(ErrorMessage = "L'adresse email est obligatoire.")]
@@ -18,14 +15,12 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Mot de passe")]
         public string Password { get; set; } = string.Empty;
 
-        /// <summary>URL de retour après connexion réussie (ex: /Portfolios).</summary>
-        public string? ReturnUrl { get; set; }
+        // URL de retour après connexion réussie
+        // Ex : l'user essaie /Portfolios -> redirigé vers Login -> après connexion retourne /Portfolios
+        // Url.IsLocalUrl() vérifie que c'est une URL locale avant de rediriger        public string? ReturnUrl { get; set; }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // REGISTER
-    // ══════════════════════════════════════════════════════════════════════
-
+    // ViewModel du formulaire d'inscription
     public class RegisterViewModel
     {
         [Required(ErrorMessage = "Le nom complet est obligatoire.")]
@@ -45,6 +40,8 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Mot de passe")]
         public string Password { get; set; } = string.Empty;
 
+        // [Compare] -> ASP.NET vérifie automatiquement que ConfirmPassword == Password
+        // Si différent -> erreur de validation avant même d'entrer dans le controller
         [Required(ErrorMessage = "Veuillez confirmer le mot de passe.")]
         [DataType(DataType.Password)]
         [Compare("Password", ErrorMessage = "Les mots de passe ne correspondent pas.")]
