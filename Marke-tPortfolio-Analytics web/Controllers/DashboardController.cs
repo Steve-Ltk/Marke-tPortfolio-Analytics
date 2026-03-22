@@ -216,7 +216,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 {
                     // Appelle le backend Analytics pour ce portefeuille
                     var analyse = await ApiService.AnalyzePortfolioAsync(
-                        portfolio.Id, dateDebut, dateFin, riskFreeRate: 0.03);
+                        portfolio.Id, dateDebut, dateFin, riskFreeRate: 0.045);
 
                     if (analyse == null) continue;
 
