@@ -1,4 +1,4 @@
-﻿@model Marke_tPortfolio_Analytics_web.ViewModels.GoalWizardViewModel
+@model Marke_tPortfolio_Analytics_web.ViewModels.GoalWizardViewModel
 @{
     Layout = "_Layout";
     ViewData["Title"] = "Mon Objectif";
@@ -48,7 +48,7 @@
 
 <div style="max-width:800px">
 
-    @* ══════════════ ÉTAPE 1 — Objectif ══════════════ *@
+    @* ÉTAPE 1 — Objectif *@
     @if (step == 1)
     {
         <form asp-action="Wizard" asp-controller="Goal" method="post"
@@ -66,28 +66,28 @@
                     @{
                         var objectifs = new[]
                         {
-                                ("Retraite", "Retraite confortable",  "Constitution d'un capital long terme",  "🏖️"),
-                                ("Projet",   "Projet immobilier",      "Apport ou acquisition immobilière",     "🏠"),
-                                ("Épargne",  "Épargne de précaution",  "Sécuriser un capital accessible",       "🏦"),
-                                ("Revenu",   "Revenus complémentaires","Générer des dividendes réguliers",       "💰"),
-                                };
+                            ("Retraite", "Retraite confortable",   "Constitution d'un capital long terme"),
+                            ("Projet",   "Projet immobilier",       "Apport ou acquisition immobilière"),
+                            ("Épargne",  "Épargne de précaution",   "Sécuriser un capital accessible"),
+                            ("Revenu",   "Revenus complémentaires", "Générer des dividendes réguliers"),
+                        };
                     }
-                    @foreach (var (val, label, desc, icon) in objectifs)
+                    @foreach (var (val, label, desc) in objectifs)
                     {
                         bool sel = Model.Objectif == val;
                         string bdStyle = sel ? "var(--green)" : "var(--border)";
                         string bgStyle = sel ? "rgba(0,208,132,.06)" : "var(--dark-4)";
-                        string cardId = "objcard-" + val;
+                        string cardId  = "objcard-" + val;
 
                         <label style="cursor:pointer">
                             <input type="radio" name="Objectif" value="@val" style="display:none"
                                    @(sel ? "checked" : "") />
                             <div id="@cardId"
                                  style="border:2px solid @bdStyle;background:@bgStyle;
-                                            border-radius:var(--radius-lg);padding:20px;transition:all .15s"
+                                        border-radius:var(--radius-lg);padding:20px;transition:all .15s"
                                  onclick="selectObjCard('@val')">
-                                <div style="font-size:28px;margin-bottom:10px">@icon</div>
-                                <div style="font-family:Sora,sans-serif;font-weight:700;font-size:14px;margin-bottom:4px">
+                                <div style="font-family:Sora,sans-serif;font-weight:700;
+                                            font-size:14px;margin-bottom:4px">
                                     @label
                                 </div>
                                 <div style="font-size:12px;color:var(--t4)">@desc</div>
@@ -97,13 +97,13 @@
                 </div>
 
                 <button type="submit" class="btn btn-green btn-full btn-lg">
-                    Continuer → Profil de risque
+                    Continuer — Profil de risque
                 </button>
             </div>
         </form>
     }
 
-    @* ══════════════ ÉTAPE 2 — Profil de risque ══════════════ *@
+    @* ÉTAPE 2 — Profil de risque *@
     else if (step == 2)
     {
         <form asp-action="Wizard" asp-controller="Goal" method="post"
@@ -143,71 +143,113 @@
                         <label>Horizon d'investissement (ans)</label>
                         <input type="number" name="HorizonAns" class="form-control"
                                value="@Model.HorizonAns" min="1" max="50" />
+                        @if (ViewData.ModelState["HorizonAns"]?.Errors.Count > 0)
+                        {
+                            <span class="field-error">
+                                @ViewData.ModelState["HorizonAns"]!.Errors[0].ErrorMessage
+                            </span>
+                        }
                     </div>
                     <div class="field">
                         <label>Capital initial (€)</label>
                         <input type="number" name="CapitalInitial" class="form-control"
-                               value="@Model.CapitalInitial" min="1000" step="1000" />
+                               value="@Model.CapitalInitial" min="1" step="1000" />
+                        @if (ViewData.ModelState["CapitalInitial"]?.Errors.Count > 0)
+                        {
+                            <span class="field-error">
+                                @ViewData.ModelState["CapitalInitial"]!.Errors[0].ErrorMessage
+                            </span>
+                        }
                     </div>
                 </div>
 
                 <div style="display:flex;gap:10px">
-                    <a href="/Goal/Wizard?step=1" class="btn btn-ghost" style="width:120px;text-align:center">
-                        ← Retour
+                    <a href="/Goal/Wizard?step=1" class="btn btn-ghost"
+                       style="width:120px;text-align:center">
+                        Retour
                     </a>
                     <button type="submit" class="btn btn-green" style="flex:1">
-                        Voir le portefeuille suggéré →
+                        Voir le portefeuille suggéré
                     </button>
                 </div>
             </div>
         </form>
     }
 
-    @* ══════════════ ÉTAPE 3 — Portefeuille suggéré ══════════════ *@
+    @* ÉTAPE 3 — Portefeuille suggéré *@
     else if (step == 3)
     {
         var t = Model.Template!;
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div class="card">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-                    <div style="font-size:32px">@t.Icone</div>
-                    <div>
-                        <div class="card-title">@t.Nom</div>
-                        <div style="font-size:12px;color:var(--t4)">Score risque @Model.ScoreRisque/10</div>
+
+                <!-- En-tête profil — sans icone, version professionnelle -->
+                <div style="margin-bottom:16px">
+                    <div class="card-title">@t.Nom</div>
+                    <div style="font-size:12px;color:var(--t4);margin-top:4px">
+                        @t.Profil · Risque @t.ClasseRisque · Score @Model.ScoreRisque/10
                     </div>
                 </div>
-                <p style="font-size:13px;color:var(--t3);margin-bottom:20px;line-height:1.6">
+
+                <p style="font-size:13px;color:var(--t3);margin-bottom:16px;line-height:1.6">
                     @t.Description
                 </p>
 
+                <!-- Badges profil / classe / positionnement -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
+                    <div style="background:var(--dark-4);border-radius:8px;
+                                padding:12px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Profil</div>
+                        <div style="font-weight:700;font-size:13px">@t.Profil</div>
+                    </div>
+                    <div style="background:var(--dark-4);border-radius:8px;
+                                padding:12px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Risque</div>
+                        <div style="font-weight:700;font-size:13px">@t.ClasseRisque</div>
+                    </div>
+                    <div style="background:var(--dark-4);border-radius:8px;
+                                padding:12px;text-align:center">
+                        <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Objectif</div>
+                        <div style="font-weight:700;font-size:11px">@t.Positionnement</div>
+                    </div>
+                </div>
+
+                <!-- CAGR et volatilité estimés -->
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
-                    <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="background:var(--dark-4);border-radius:10px;
+                                padding:14px;text-align:center">
                         <div style="font-size:10px;color:var(--t4);margin-bottom:3px">CAGR estimé</div>
-                        <div style="font-family:Sora,sans-serif;font-weight:800;font-size:22px;
-                                    color:var(--green)">
+                        <div style="font-family:Sora,sans-serif;font-weight:800;
+                                    font-size:22px;color:var(--green)">
                             ~@t.CagrEstime%/an
                         </div>
                     </div>
-                    <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
+                    <div style="background:var(--dark-4);border-radius:10px;
+                                padding:14px;text-align:center">
                         <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Volatilité estimée</div>
-                        <div style="font-family:Sora,sans-serif;font-weight:800;font-size:22px;
-                                    color:@t.Couleur">
+                        <div style="font-family:Sora,sans-serif;font-weight:800;
+                                    font-size:22px;color:@t.Couleur">
                             ~@t.VolatiliteEstimee%
                         </div>
                     </div>
                 </div>
 
+                <!-- Allocation par actif -->
                 <div style="display:flex;flex-direction:column;gap:10px">
                     @foreach (var alloc in t.Allocation)
                     {
                         <div style="display:flex;align-items:center;gap:10px">
-                            <div style="font-size:13px;font-weight:700;width:60px">@alloc.Ticker</div>
-                            <div style="flex:1;height:8px;background:var(--dark-4);
-                                            border-radius:999px;overflow:hidden">
-                                <div style="width:@alloc.Poids%;height:100%;
-                                                background:@alloc.Couleur;border-radius:999px"></div>
+                            <div style="font-size:13px;font-weight:700;width:60px">
+                                @alloc.Ticker
                             </div>
-                            <div style="font-size:13px;font-weight:700;width:40px;text-align:right">
+                            <div style="flex:1;height:8px;background:var(--dark-4);
+                                        border-radius:999px;overflow:hidden">
+                                <div style="width:@alloc.Poids%;height:100%;
+                                            background:@alloc.Couleur;border-radius:999px">
+                                </div>
+                            </div>
+                            <div style="font-size:13px;font-weight:700;
+                                        width:40px;text-align:right">
                                 @alloc.Poids%
                             </div>
                         </div>
@@ -216,22 +258,23 @@
             </div>
 
             <div style="display:flex;flex-direction:column;gap:14px">
+                <!-- Récapitulatif configuration -->
                 <div class="card">
                     <div class="card-title" style="margin-bottom:12px">Votre configuration</div>
                     @{
                         var rows = new[]
                         {
-                                ("Objectif",      Model.Objectif,                        ""),
-                                ("Profil risque", Model.ScoreRisque + " / 10",           ""),
-                                ("Horizon",       Model.HorizonAns + " ans",             ""),
-                                ("Capital",       "€" + Model.CapitalInitial.ToString("N0"), "var(--green)"),
-                                };
+                            ("Objectif",      Model.Objectif,                           ""),
+                            ("Profil risque", Model.ScoreRisque + " / 10",             ""),
+                            ("Horizon",       Model.HorizonAns + " ans",               ""),
+                            ("Capital",       "€" + Model.CapitalInitial.ToString("N0"), "var(--green)"),
+                        };
                     }
                     <div style="display:flex;flex-direction:column;gap:0">
                         @foreach (var (lbl, val, col) in rows)
                         {
-                            <div style="display:flex;justify-content:space-between;padding:10px 0;
-                                            border-bottom:1px solid var(--border-2)">
+                            <div style="display:flex;justify-content:space-between;
+                                        padding:10px 0;border-bottom:1px solid var(--border-2)">
                                 <span style="font-size:13px;color:var(--t4)">@lbl</span>
                                 @if (string.IsNullOrEmpty(col))
                                 {
@@ -246,6 +289,7 @@
                     </div>
                 </div>
 
+                <!-- Bouton simulation -->
                 <form asp-action="Wizard" asp-controller="Goal" method="post"
                       asp-route-step="3">
                     @Html.AntiForgeryToken()
@@ -255,12 +299,13 @@
                     <input type="hidden" name="HorizonAns" value="@Model.HorizonAns" />
                     <input type="hidden" name="CapitalInitial" value="@Model.CapitalInitial" />
                     <button type="submit" class="btn btn-green btn-full btn-lg">
-                        🔮 Lancer la simulation Monte Carlo →
+                        Lancer la simulation
                     </button>
                 </form>
 
-                <a href="/Goal/Wizard?step=2" class="btn btn-ghost btn-full" style="text-align:center">
-                    ← Modifier le profil
+                <a href="/Goal/Wizard?step=2" class="btn btn-ghost btn-full"
+                   style="text-align:center">
+                    Modifier le profil
                 </a>
             </div>
         </div>
@@ -270,7 +315,7 @@
 
 @section Scripts {
     <script>
-        // ── Objectif cards ────────────────────────────────────────────────────
+        // Objectif cards — sélection visuelle
         function selectObjCard(val) {
             var allIds = ['Retraite', 'Projet', 'Épargne', 'Revenu'];
             allIds.forEach(function(id) {
@@ -291,18 +336,18 @@
             });
         }
 
-        // ── Score risque slider ───────────────────────────────────────────────
+        // Score risque slider — descriptions par niveau
         var riskDescs = {
-            '0': 'Très prudent — Préservation maximale du capital.',
-            '1': 'Prudent — Légère tolérance au risque pour un rendement supérieur au livret.',
-            '2': 'Prudent modéré — Faible tolérance aux baisses.',
-            '3': 'Modéré prudent — Mix majoritairement obligations.',
-            '4': 'Équilibré prudent — 60% actions, 40% obligations.',
-            '5': 'Équilibré — Mix 50/50 classique.',
-            '6': 'Équilibré dynamique — Biais actions.',
-            '7': 'Dynamique — 70-80% actions croissance.',
-            '8': 'Dynamique agressif — Forte concentration tech.',
-            '9': 'Agressif — Actions growth uniquement.',
+            '0':  'Très prudent — Préservation maximale du capital.',
+            '1':  'Prudent — Légère tolérance au risque pour un rendement supérieur au livret.',
+            '2':  'Prudent modéré — Faible tolérance aux baisses.',
+            '3':  'Modéré prudent — Biais défensif avec quelques actions.',
+            '4':  'Équilibré prudent — 60% actions, 40% défensif.',
+            '5':  'Équilibré — Mix 50/50 classique.',
+            '6':  'Équilibré dynamique — Biais actions.',
+            '7':  'Dynamique — 70-80% actions croissance.',
+            '8':  'Dynamique agressif — Forte concentration tech.',
+            '9':  'Agressif — Actions growth uniquement.',
             '10': 'Très agressif — Volatilité extrême acceptée.'
         };
 
@@ -313,7 +358,7 @@
             if (desc) desc.textContent = riskDescs[val] || '';
         }
 
-        // Init slider au chargement
+        // Init slider au chargement de la page
         (function() {
             var range = document.getElementById('score-range');
             if (range) updateScore(range.value);
