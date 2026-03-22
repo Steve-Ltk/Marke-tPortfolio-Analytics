@@ -2,10 +2,6 @@
 
 namespace MarketPortfolioAnalytics.Models.Analytics
 {
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ANALYSE DE BASE
-    // ═══════════════════════════════════════════════════════════════════════════
-
     public class PortfolioAnalyticsResult
     {
         public int PortfolioId { get; set; }
@@ -37,11 +33,7 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public decimal ReturnPct { get; set; }
         public double WeightPct { get; set; }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // COMPARAISON
-    // ═══════════════════════════════════════════════════════════════════════════
-
+    
     public class CompareRequest
     {
         public List<int> PortfolioIds { get; set; } = new();
@@ -67,10 +59,6 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public double MaxDrawdown { get; set; }
         public decimal TotalReturnPct { get; set; }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // OPTIMISATION MARKOWITZ
-    // ═══════════════════════════════════════════════════════════════════════════
 
     public class OptimizationRequest
     {
@@ -120,10 +108,6 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public double SharpeRatio { get; set; }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // MONTE CARLO
-    // ═══════════════════════════════════════════════════════════════════════════
-
     public class MonteCarloRequest
     {
         public int HorizonDays { get; set; } = 252;
@@ -132,22 +116,6 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public DateTime? HistoryTo { get; set; }
     }
 
-    /// <summary>
-    /// Résultat Monte Carlo.
-    ///
-    /// RÈGLE DE NOMMAGE JSON (camelCase ASP.NET Core — premier caractère abaissé) :
-    ///
-    ///   VaR95  → "vaR95"   : Postman accède jsonData.vaR95  ✓
-    ///   VaR99  → "vaR99"   : Postman accède jsonData.vaR99  ✓
-    ///   CVaR95 → "cVaR95"  : Postman accède jsonData.cVaR95 ✓
-    ///
-    /// AUCUN [JsonPropertyName] sur ces propriétés.
-    /// La politique camelCase native d'ASP.NET Core produit exactement les clés
-    /// attendues par les tests Postman.
-    ///
-    /// NE PAS AJOUTER [JsonPropertyName] sur VaR95, VaR99 ou CVaR95 —
-    /// cela casserait la correspondance avec les tests.
-    /// </summary>
     public class MonteCarloResult
     {
         public int PortfolioId { get; set; }
@@ -192,10 +160,6 @@ namespace MarketPortfolioAnalytics.Models.Analytics
         public int Count { get; set; }
         public double FrequencyPct { get; set; }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BACKTESTING
-    // ═══════════════════════════════════════════════════════════════════════════
 
     public class BacktestRequest
     {
