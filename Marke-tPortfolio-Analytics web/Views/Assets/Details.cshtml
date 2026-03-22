@@ -111,8 +111,6 @@
         </div>
     </div>
 
-    <!-- Actions rapides -->
-    <!-- Actions rapides -->
     <div style="display:flex;flex-direction:column;gap:14px">
         <div class="card">
             <div class="card-header"><div class="card-title">Ajouter à un portefeuille</div></div>
@@ -143,7 +141,7 @@
             </a>
         </div>
 
-        @* ── Suppression ── *@
+        @* Suppression *@
         @if (!Model.EstDansPortefeuille)
         {
             <div class="card">
@@ -164,7 +162,7 @@
         else
         {
             <div class="card">
-                <div class="card-header"><div class="card-title">🔒 Suppression impossible</div></div>
+                <div class="card-header"><div class="card-title"> Suppression impossible !! </div></div>
                 <p style="font-size:12px;color:var(--t4)">
                     Retirez d'abord cet actif de tous vos portefeuilles.
                 </p>
