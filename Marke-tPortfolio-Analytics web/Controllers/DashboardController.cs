@@ -138,29 +138,29 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             var pills = new List<string>(); // badges affichés sous le score
 
             if (vm.SharpeRatio > 1)
-            { score += 25; pills.Add($"Sharpe Ratio: {vm.SharpeRatio:F2} • Efficient"); }
+            { score += 25; pills.Add($"Sharpe Ratio: {vm.SharpeRatio:F2} · Efficient"); }
             else
-                pills.Add($"Sharpe Ratio: {vm.SharpeRatio:F2} • Sous-optimal");
+                pills.Add($"Sharpe Ratio: {vm.SharpeRatio:F2} · Sous-optimal");
 
             if (allPositions.Count >= 4)
-            { score += 15; pills.Add($"{allPositions.Count} actifs • Diversifié"); }
+            { score += 15; pills.Add($"{allPositions.Count} actifs · Diversifié"); }
             else
-                pills.Add($"{allPositions.Count} actif(s) • Concentré");
+                pills.Add($"{allPositions.Count} actif(s) · Concentré");
 
             if (allPositions.Select(p => p.TypeActif).Distinct().Count() >= 2)
-            { score += 10; pills.Add("Allocation • Multi-actifs"); }
+            { score += 10; pills.Add("Allocation · Multi-actifs"); }
             else
-                pills.Add("Allocation • Mono-actif")
+                pills.Add("Allocation · Mono-actif"),
 
             if (allPositions.Any(p => p.TypeActif == "Bond"))
-            { score += 10; pills.Add("Allocation • Exposition obligataire"); }
+            { score += 10; pills.Add("Allocation · Exposition obligataire"); }
             else
                 pills.Add("Allocation • Sans obligataire");
 
             if (vm.RendementTotal > 4)
-            { score += 20; pills.Add($"+{vm.RendementTotal:F1}% • Au-dessus de l’inflation"); }
+            { score += 20; pills.Add($"+{vm.RendementTotal:F1}% · Au-dessus de l’inflation"); }
             else
-                pills.Add($"{vm.RendementTotal:F1}% • Modéré");
+                pills.Add($"{vm.RendementTotal:F1}% · Modéré");
 
             vm.ScoreInvestisseur = Math.Min(score, 100);
             vm.ScorePills = pills.Take(4).ToList();
