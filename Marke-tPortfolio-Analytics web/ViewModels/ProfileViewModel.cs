@@ -2,10 +2,8 @@
 
 namespace Marke_tPortfolio_Analytics_web.ViewModels
 {
-    /// <summary>
-    /// ViewModel pour Profile/Index.cshtml.
-    /// Couvre : informations personnelles + stats + changement mot de passe.
-    /// </summary>
+    // ViewModel de la page Profil utilisateur
+    // Couvre les infos personnelles + statistiques + changement de mot de passe
     public class ProfileViewModel
     {
         public int UserId { get; set; }
@@ -20,7 +18,8 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Adresse e-mail")]
         public string Email { get; set; } = string.Empty;
 
-        // Statistiques affichées sur la page
+        // Statistiques calculées dans ProfileController
+        // Affichées dans les 3 cards en haut de la page
         public int NbPortfolios { get; set; }
         public int NbPositions { get; set; }
         public decimal ValeurTotale { get; set; }
