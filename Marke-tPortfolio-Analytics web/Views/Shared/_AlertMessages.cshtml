@@ -1,10 +1,16 @@
-﻿@if (TempData["WelcomeMessage"] != null)
+@* Affiche les messages TempData une seule fois après une action.
+   TempData survit à UNE redirection puis est effacé automatiquement.
+   Utilisé après : création, modification, suppression, import FMP. *@
+@if (TempData["WelcomeMessage"] != null)
 {
     <div class="mpa-alert mpa-alert-success" style="margin:0 36px 16px">
-        🎉 @TempData["WelcomeMessage"]
+         @TempData["WelcomeMessage"]
+        @* onclick -> ferme l'alerte sans recharger la page *@
         <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">×</button>
     </div>
 }
+
+@* Message de succès -> vert avec icone check *@
 @if (TempData["SuccessMessage"] != null)
 {
     <div class="mpa-alert mpa-alert-success" style="margin:0 36px 16px">
@@ -13,6 +19,8 @@
         <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">✕</button>
     </div>
 }
+
+@* Message d'erreur -> rouge avec icone cercle d'alerte *@
 @if (TempData["ErrorMessage"] != null)
 {
     <div class="mpa-alert mpa-alert-error" style="margin:0 36px 16px">
@@ -21,6 +29,8 @@
         <button class="alert-close" onclick="this.closest('.mpa-alert').remove()">✕</button>
     </div>
 }
+
+@* Message d'avertissement -> orange avec icone triangle *@
 @if (TempData["WarningMessage"] != null)
 {
     <div class="mpa-alert mpa-alert-warning" style="margin:0 36px 16px">
