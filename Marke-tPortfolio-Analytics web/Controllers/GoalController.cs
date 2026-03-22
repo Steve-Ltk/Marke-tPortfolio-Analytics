@@ -54,9 +54,28 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             // Stocke toutes les données de l'étape 2 en TempData
             if (step == 2)
             {
-                TempData["Goal_Objectif"] = model.Objectif;
-                TempData["Goal_ScoreRisque"] = model.ScoreRisque;
-                TempData["Goal_HorizonAns"] = model.HorizonAns;
+                // Validation : capital doit être positif
+                if (model.CapitalInitial <= 0)
+                {
+                    ModelState.AddModelError("CapitalInitial",
+                        "Le capital initial doit être supérieur à 0.");
+                    model.Step = 2;
+                    // Recharge le template si on est à l'étape 2
+                    return View(model);
+                }
+
+                // Validation : horizon doit être positif
+                if (model.HorizonAns <= 0)
+                {
+                    ModelState.AddModelError("HorizonAns",
+                        "L'horizon doit être d'au moins 1 an.");
+                    model.Step = 2;
+                    return View(model);
+                }
+
+                TempData["Goal_Objectif"]       = model.Objectif;
+                TempData["Goal_ScoreRisque"]    = model.ScoreRisque;
+                TempData["Goal_HorizonAns"]     = model.HorizonAns;
                 TempData["Goal_CapitalInitial"] = model.CapitalInitial.ToString();
                 return RedirectToAction(nameof(Wizard), new { step = 3 });
             }
@@ -96,15 +115,15 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return View(vm);
         }
 
-        // POST /Goal/CreateFromGoal -> crée le portefeuille recommandé
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateFromGoal(int scoreRisque)
         {
             var template = GoalTemplates.GetTemplate(scoreRisque);
-            int userId = GetUserId() ?? 0;
+            int userId   = GetUserId() ?? 0;
 
+            // 1. Crée le portefeuille
             var portfolio = await ApiService.CreatePortfolioAsync(
-                template.Nom, "EUR", userId);
+            template.Nom, "EUR", userId);
 
             if (portfolio == null)
             {
@@ -112,26 +131,70 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 return RedirectToAction(nameof(Result));
             }
 
-            SetSuccess($"Portefeuille « {template.Nom} » créé ! Ajoutez vos positions.");
-            return RedirectToAction("Details", "Portfolios", new { id = portfolio.Id });
+            // 2. Pour chaque actif du template → importe si pas encore en base
+            //    puis crée la position automatiquement
+            int positionsCreees = 0;
+
+            foreach (var alloc in template.Allocation)
+            {
+                // Vérifie si l'actif existe déjà en base
+                var asset = await ApiService.GetAssetByTickerAsync(alloc.Ticker);
+
+                // Sinon l'importe depuis FMP
+                if (asset == null)
+                asset = await ApiService.ImportStockFromFmpAsync(alloc.Ticker);
+
+                // Si l'import a échoué → on passe au suivant sans planter
+                if (asset == null)
+                {
+                    Logger.LogWarning("CreateFromGoal : impossible d'importer {Ticker}",
+                        alloc.Ticker);
+                    continue;
+                }
+
+                // Récupère le prix actuel via FMP
+                var (prix, _) = await ApiService.GetQuoteAsync(asset.Ticker);
+
+                // Si FMP ne répond pas -> prix d'achat symbolique à 1
+                if (prix <= 0) prix = 1m;
+
+                // Crée la position avec 1 unité au prix actuel
+                // L'user pourra modifier la quantité ensuite via Edit position
+                var position = await ApiService.CreatePositionAsync(
+                portfolio.Id,
+                asset.Id,
+                quantity: 1m,           // 1 unité symbolique
+                avgBuyPrice: prix,      // prix actuel = prix d'achat initial
+                buyDate: DateTime.Today
+                );
+
+                if (position != null)
+                positionsCreees++;
+            }
+
+        // Message selon le nombre de positions créées
+        if (positionsCreees == template.Allocation.Count)
+        {
+            SetSuccess(
+                $"Portefeuille « {template.Nom} » créé avec " +
+                $"{positionsCreees} positions ! " +
+                $"Ajustez les quantités selon votre capital.");
+         }
+        else if (positionsCreees > 0)
+        {
+            SetWarning(
+                $"Portefeuille créé avec {positionsCreees}/{template.Allocation.Count} positions. " +
+                $"Certains actifs n'ont pas pu être importés depuis FMP.");
+        }
+        else
+        {
+            SetWarning(
+                $"Portefeuille « {template.Nom} » créé mais vide. " +
+                $"FMP n'a pas répondu pour les actifs du template.");
         }
 
-        // Construit le ViewModel du wizard en lisant les données TempData existantes
-        private GoalWizardViewModel BuildWizardVm(int step)
-        {
-            TryGetWizardData(out var obj, out var score, out var horizon, out var capital);
-            var vm = new GoalWizardViewModel
-            {
-                Step = step,
-                Objectif = obj,
-                ScoreRisque = score,
-                HorizonAns = horizon,
-                CapitalInitial = capital,
-                // Template seulement à partir de l'étape 3
-                Template = step >= 3 ? GoalTemplates.GetTemplate(score) : null
-            };
-            return vm;
-        }
+        return RedirectToAction("Details", "Portfolios", new { id = portfolio.Id });
+    }
 
         // Lit les données du wizard depuis TempData
         // TempData.Peek -> lit sans effacer (contrairement à TempData[key])
