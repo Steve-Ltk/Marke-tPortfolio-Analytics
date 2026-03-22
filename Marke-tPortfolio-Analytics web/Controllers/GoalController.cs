@@ -5,36 +5,35 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Marke_tPortfolio_Analytics_web.Controllers
 {
-    /// <summary>
-    /// Wizard Mon Objectif — 4 étapes dans UNE seule vue (Wizard.cshtml).
-    /// Résultat Monte Carlo dans Result.cshtml.
-    ///
-    /// Flux :
-    ///   GET  /Goal/Wizard?step=1   → Étape 1 (objectif)
-    ///   POST /Goal/Wizard?step=1   → Valide + redirige step=2
-    ///   GET  /Goal/Wizard?step=2   → Étape 2 (profil)
-    ///   POST /Goal/Wizard?step=2   → Valide + redirige step=3
-    ///   GET  /Goal/Wizard?step=3   → Étape 3 (template)
-    ///   POST /Goal/Wizard?step=3   → Calcule simulation → Result.cshtml
-    ///   POST /Goal/CreateFromGoal  → Crée le portefeuille → Portfolios/Details
-    /// </summary>
+    // Wizard "Mon Objectif" en 3 étapes dans une seule vue Wizard.cshtml.
+    // Résultat Monte Carlo simplifié dans Result.cshtml.
+    //
+    // Flux complet :
+    // GET  /Goal/Wizard?step=1  -> étape 1 (choix objectif)
+    // POST /Goal/Wizard?step=1  -> valide + redirect step=2
+    // GET  /Goal/Wizard?step=2  -> étape 2 (profil de risque)
+    // POST /Goal/Wizard?step=2  -> valide + redirect step=3
+    // GET  /Goal/Wizard?step=3  -> étape 3 (portefeuille suggéré)
+    // POST /Goal/Wizard?step=3  -> calcule simulation -> Result.cshtml
+    // POST /Goal/CreateFromGoal -> crée le portefeuille -> Portfolios/Details
     public class GoalController : BaseController
     {
         public GoalController(IApiService api, ILogger<GoalController> logger)
             : base(api, logger) { }
 
-        // ── GET Wizard (toutes étapes) ────────────────────────────────────
+        // GET /Goal/Wizard?step=X -> affiche l'étape X du wizard
 
         [HttpGet]
         public IActionResult Wizard(int step = 1)
         {
+            // Clamp -> garantit que step est entre 1 et 4
             step = Math.Clamp(step, 1, 4);
 
             var vm = BuildWizardVm(step);
             return View(vm);
         }
 
-        // ── POST Étape 1 — Objectif ───────────────────────────────────────
+        // POST /Goal/Wizard?step=X -> traite l'étape X et redirige vers la suivante
 
         [HttpPost, ValidateAntiForgeryToken]
         [Route("Goal/Wizard")]
@@ -52,6 +51,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 return RedirectToAction(nameof(Wizard), new { step = 2 });
             }
 
+            // Stocke toutes les données de l'étape 2 en TempData
             if (step == 2)
             {
                 TempData["Goal_Objectif"] = model.Objectif;
@@ -64,6 +64,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             if (step == 3)
             {
                 // Passer à Result avec la simulation
+                // TempData.Keep() -> empêche TempData d'être effacé après la redirection
                 TempData.Keep();
                 return RedirectToAction(nameof(Result));
             }
@@ -71,16 +72,21 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return RedirectToAction(nameof(Wizard), new { step = 1 });
         }
 
-        // ── GET Result — simulation Monte Carlo ───────────────────────────
-
+        // GET /Goal/Result -> affiche la simulation Monte Carlo simplifiée
         [HttpGet]
         public IActionResult Result()
         {
+            // Si TempData manque -> wizard pas complété -> retour étape 1
             if (!TryGetWizardData(out var obj, out var score, out var horizon, out var capital))
                 return RedirectToAction(nameof(Wizard), new { step = 1 });
 
+            // Récupère le template de portefeuille selon le score de risque
             var template = GoalTemplates.GetTemplate(score);
+
+            // Lance la simulation log-normale simplifiée (pas de GBM complet)
             var vm = SimulerLogNormale(capital, template, horizon);
+
+            // Complète le ViewModel avec les données du wizard
             vm.Objectif = obj;
             vm.ScoreRisque = score;
             vm.HorizonAns = horizon;
@@ -90,8 +96,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return View(vm);
         }
 
-        // ── POST CreateFromGoal — crée le portefeuille ────────────────────
-
+        // POST /Goal/CreateFromGoal -> crée le portefeuille recommandé
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateFromGoal(int scoreRisque)
         {
@@ -111,8 +116,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return RedirectToAction("Details", "Portfolios", new { id = portfolio.Id });
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────
-
+        // Construit le ViewModel du wizard en lisant les données TempData existantes
         private GoalWizardViewModel BuildWizardVm(int step)
         {
             TryGetWizardData(out var obj, out var score, out var horizon, out var capital);
@@ -123,11 +127,15 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 ScoreRisque = score,
                 HorizonAns = horizon,
                 CapitalInitial = capital,
+                // Template seulement à partir de l'étape 3
                 Template = step >= 3 ? GoalTemplates.GetTemplate(score) : null
             };
             return vm;
         }
 
+        // Lit les données du wizard depuis TempData
+        // TempData.Peek -> lit sans effacer (contrairement à TempData[key])
+        // Retourne false si l'objectif manque -> wizard pas complété
         private bool TryGetWizardData(
             out string objectif, out int score, out int horizon, out decimal capital)
         {
@@ -140,17 +148,24 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return !string.IsNullOrEmpty(objectif);
         }
 
+        // Simule l'évolution du capital avec une formule log-normale simplifiée
+        // Plus rapide que Monte Carlo complet -> suffisant pour l'estimation du wizard
+        // mu = rendement annuel estimé, sigma = volatilité estimée (depuis le template)
         private static GoalResultViewModel SimulerLogNormale(
             decimal capital, GoalTemplates.Template t, int n)
         {
             double mu = (double)(t.CagrEstime / 100);
             double sigma = (double)(t.VolatiliteEstimee / 100);
             double cap = (double)capital;
-            int pts = 20;
-
+            int pts = 20; // nombre de points sur le graphique
+            // Médiane : cap × e^(μ×n) -> scénario central sans volatilité
             double mediane = cap * Math.Exp(mu * n);
+             // P5 : cap × e^((μ - 1.645σ)×√n) -> scénario pessimiste (5% pires cas)
+             // 1.645 = quantile 95% de la loi normale standard
             double p5 = cap * Math.Exp((mu - 1.645 * sigma) * Math.Sqrt(n));
+            // P95 : cap × e^((μ + 1.645σ)×√n) -> scénario optimiste (5% meilleurs cas)
             double p95 = cap * Math.Exp((mu + 1.645 * sigma) * Math.Sqrt(n));
+            // Probabilité de gain -> Phi(μ×√n / σ) -> loi normale cumulée
             double prob = Phi(mu * Math.Sqrt(n) / sigma) * 100;
 
             var labels = new List<string>();
@@ -158,11 +173,13 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             var low = new List<decimal>();
             var high = new List<decimal>();
 
+            // Génère les points de la courbe pour le graphique
             for (int i = 0; i <= pts; i++)
             {
                 double t_ = (double)n * i / pts;
-                labels.Add($"An {t_:F1}");
+                labels.Add($"An {t_:F1}"); fraction de l'horizon
                 med.Add((decimal)(cap * Math.Exp(mu * t_)));
+                // +0.001 -> évite sqrt(0) au premier point
                 low.Add((decimal)(cap * Math.Exp((mu - 1.645 * sigma) * Math.Sqrt(t_ + 0.001))));
                 high.Add((decimal)(cap * Math.Exp((mu + 1.645 * sigma) * Math.Sqrt(t_ + 0.001))));
             }
@@ -180,6 +197,9 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             };
         }
 
+        // Phi = fonction de répartition de la loi normale standard N(0,1)
+        // Approximation polynomiale de Abramowitz & Stegun -> précision suffisante pour le wizard
+        // Retourne la probabilité que X <= x pour X ~ N(0,1)
         private static double Phi(double x)
         {
             double t = 1.0 / (1.0 + 0.2316419 * Math.Abs(x));
