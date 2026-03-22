@@ -1,38 +1,56 @@
-﻿<!DOCTYPE html>
+@* Layout principal — utilisé par toutes les pages authentifiées.
+   Structure : Sidebar gauche + zone principale droite.
+   _LayoutAuth.cshtml est utilisé uniquement pour Login et Register. *@
+<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    @* Titre de l'onglet : "Dashboard — Catalis" ou juste "Catalis" si pas de titre *@
     <title>@(ViewData["Title"] != null ? ViewData["Title"] + " — Catalis" : "Catalis")</title>
 
+    @* Fonts Sora (titres) + DM Sans (corps) chargées depuis Google Fonts *@
     <!-- Fonts Catalis -->
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet" />
 
+    @* Chart.js chargé depuis CDN -> utilisé par charts.js et analytics.js *@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
+    @* CSS principal de l'app -> toutes les variables CSS et composants *@
+    @* asp-append-version -> ajoute ?v=hash pour invalider le cache navigateur *@
     <!-- CSS Catalis -->
     <link rel="stylesheet" href="~/css/mpa.css" asp-append-version="true" />
 
+    @* Section optionnelle -> les vues peuvent injecter leur propre CSS *@
     @RenderSection("Styles", required: false)
 </head>
 <body class="mpa-body">
 
+    @* Layout 2 colonnes : sidebar fixe à gauche + contenu scrollable à droite *@
     <div class="mpa-layout">
+        @* Sidebar : navigation principale (Dashboard, Portefeuilles, Marché...) *@
         @await Html.PartialAsync("_Sidebar")
 
         <div class="mpa-main">
+            @* Topbar : breadcrumb, recherche, ticker tape *@
             @await Html.PartialAsync("_Topbar")
+
+            @* Messages TempData : succès (vert), erreur (rouge), avertissement (orange)
             @await Html.PartialAsync("_AlertMessages")
 
+            @* Zone de contenu principal -> chaque vue est injectée ici *@
             <main class="mpa-content">
                 @RenderBody()
             </main>
         </div>
     </div>
-
+    @* jQuery chargé avant site.js car site.js peut en dépendre *@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+
+    @* Section Scripts -> les vues injectent leur JS spécifique ici (charts, analytics...) *@
     @RenderSection("Scripts", required: false)
 
 </body>
