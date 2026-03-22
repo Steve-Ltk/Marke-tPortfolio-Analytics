@@ -19,7 +19,7 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         public string SelectedPortfolioName { get; set; } = string.Empty;
         public DateTime DateDebut { get; set; } = DateTime.UtcNow.AddYears(-1);
         public DateTime DateFin { get; set; } = DateTime.UtcNow;
-        public double TauxSansRisque { get; set; } = 3.0;
+        public double TauxSansRisque { get; set; } = 4.5;
         public bool HasResult => Analyse != null;
 
         public PortfolioAnalyticsResult? Analyse { get; set; }
