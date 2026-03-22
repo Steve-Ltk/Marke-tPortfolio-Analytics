@@ -1,4 +1,5 @@
-﻿@model Marke_tPortfolio_Analytics_web.ViewModels.AssetIndexViewModel
+
+@model Marke_tPortfolio_Analytics_web.ViewModels.AssetIndexViewModel
 @{
     Layout = "_Layout";
     ViewData["Title"] = "Marché";
@@ -27,14 +28,15 @@
     </div>
 </div>
 
-<!-- Panel import FMP -->
+@* Panel import FMP — masqué par défaut, affiché via classList.toggle *@
 <div id="importPanel" class="hidden" style="margin-bottom:20px">
     <div class="card" style="max-width:480px">
         <div class="card-title" style="margin-bottom:14px">Importer un actif depuis FMP</div>
         <form asp-action="ImportFmp" asp-controller="Assets" method="post" style="display:flex;gap:10px;flex-wrap:wrap">
-            @Html.AntiForgeryToken()
+            @Html.AntiForgeryToken() @* protection CSRF obligatoire sur les POST *@
             <input type="text" name="ticker" placeholder="Ex : AAPL, MC.PA, TLT…"
                    class="form-control" style="flex:1" autocomplete="off" />
+            @* assetType -> "stock" ou "bond" -> détermine l'endpoint backend appelé *@
             <select name="assetType" class="form-control" style="width:140px">
                 <option value="stock">Action</option>
                 <option value="bond">Obligation</option>
@@ -47,7 +49,8 @@
     </div>
 </div>
 
-<!-- Barre de filtres + recherche -->
+@* Heatmap — une carte par actif, couleur selon variation journalière *@
+@* AssetsFiltrés -> propriété calculée du ViewModel -> filtre + tri déjà appliqués *@
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
     <form method="get" style="display:flex;align-items:center;gap:10px;flex:1;min-width:280px">
         <div class="topbar-search" style="flex:1;max-width:400px;height:40px">
@@ -64,6 +67,7 @@
     <div style="display:flex;gap:6px">
         @foreach (var f in new[] { "Tous", "Stock", "Bond" })
         {
+            @* HeatmapBg et HeatmapBorder -> propriétés calculées de AssetCard *@
             <a href="?type=@f&q=@Model.Recherche"
                class="btn @(Model.FiltreType == f ? "btn-green" : "btn-ghost")"
                style="height:36px;font-size:12px">@f</a>
