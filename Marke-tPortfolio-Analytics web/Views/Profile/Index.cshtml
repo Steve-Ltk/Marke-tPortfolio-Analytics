@@ -12,16 +12,23 @@
     </div>
 </div>
 
+@* Page profil en 2 colonnes :
+   Colonne gauche  -> stats + avatar
+   Colonne droite  -> formulaire modification infos
+   Bas de page     -> changement mot de passe (pleine largeur) + déconnexion *@
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px">
 
-    <!-- Bloc stats -->
+    @* Bloc stats — avatar + 3 métriques *@
     <div class="card">
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+            @* Avatar généré dynamiquement -> initiale du nom en gradient *@
             <div style="width:64px;height:64px;
                         background:linear-gradient(135deg,var(--green),#3b82f6);
                         border-radius:50%;display:flex;align-items:center;justify-content:center;
                         font-family:Sora,sans-serif;font-weight:800;font-size:24px;
                         color:#fff;flex-shrink:0">
+                @* Substring(0,1) -> première lettre. ToUpper() -> toujours majuscule *
                 @Model.FullName.Substring(0, 1).ToUpper()
             </div>
             <div>
@@ -29,6 +36,8 @@
                 <div style="font-size:13px;color:var(--t4)">@Model.Email</div>
             </div>
         </div>
+
+        @* 3 métriques : portefeuilles, positions, valeur totale *@
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
             <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
                 <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Portefeuilles</div>
@@ -40,6 +49,7 @@
             </div>
             <div style="background:var(--dark-4);border-radius:10px;padding:14px;text-align:center">
                 <div style="font-size:10px;color:var(--t4);margin-bottom:3px">Valeur EUR</div>
+                @* N0 -> pas de décimales, avec séparateur de milliers *@
                 <div style="font-family:Sora,sans-serif;font-weight:800;font-size:16px;color:var(--green)">
                     €@Model.ValeurTotale.ToString("N0")
                 </div>
@@ -47,11 +57,12 @@
         </div>
     </div>
 
-    <!-- Modifier les informations -->
+    @* Formulaire modification infos personnelles *@
     <div class="card">
         <div class="card-title" style="margin-bottom:16px">Informations personnelles</div>
         <form asp-action="Update" asp-controller="Profile" method="post">
             @Html.AntiForgeryToken()
+             @* UserId en hidden -> nécessaire pour identifier l'user dans le controller *@
             <input type="hidden" asp-for="UserId" />
 
             <div class="field">
@@ -72,7 +83,8 @@
         </form>
     </div>
 
-    <!-- Sécurité — changement de mot de passe -->
+    @* Changement mot de passe — pleine largeur (grid-column:1/-1) *@
+    @* grid-column:1/-1 -> s'étend de la première à la dernière colonne *@
     <div class="card" style="grid-column:1/-1">
         <div class="card-title" style="margin-bottom:16px">🔒 Sécurité</div>
         <form asp-action="ChangePassword" asp-controller="Profile" method="post"
@@ -85,11 +97,15 @@
                 <input name="CurrentPassword" type="password" class="form-control"
                        placeholder="Mot de passe actuel" />
             </div>
+
+            @* 3 champs sur la même ligne + bouton à droite *@
             <div class="field" style="margin-bottom:0">
                 <label>Nouveau mot de passe</label>
+                @* oninput -> jauge de force du mot de passe en JS *@
                 <input name="NewPassword" type="password" class="form-control" id="newPwd"
                        placeholder="Minimum 8 caractères"
                        oninput="checkStrength(this.value)" />
+                @* Jauge de force -> 4 barres colorées selon la complexité *@
                 <div class="strength-bars" style="margin-top:6px;display:flex;gap:3px">
                     @for (int i = 1; i <= 4; i++)
                     {
@@ -107,6 +123,8 @@
                 Changer →
             </button>
         </form>
+        @* PwdError -> TempData spécifique au changement de mot de passe *@
+        @* Différent de TempData["ErrorMessage"] -> s'affiche dans la carte sécurité *@
         @if (ViewData["PwdError"] != null)
         {
             <div class="insight-box danger" style="margin-top:12px">@ViewData["PwdError"]</div>
@@ -128,12 +146,16 @@
 
 @section Scripts {
     <script>
+        // Jauge de force du mot de passe -> 4 barres colorées
+        // Vérifie 4 critères : longueur, majuscule, chiffre, caractère spécial
         function checkStrength(val) {
             var checks = [val.length >= 8, /[A-Z]/.test(val), /[0-9]/.test(val), /[^A-Za-z0-9]/.test(val)];
-            var score  = checks.filter(Boolean).length;
+            var score  = checks.filter(Boolean).length; // nombre de critères satisfaits
+            // Couleur selon le score : rouge (1) -> orange (2) -> vert (3-4)
             var colors = { 1:'#f43f5e', 2:'#f59e0b', 3:'#00d084', 4:'#00d084' };
             [1,2,3,4].forEach(function(i) {
                 var bar = document.getElementById('sb'+i);
+                // Barre colorée si le score atteint ce niveau, grise sinon
                 if (bar) bar.style.background = i <= score ? (colors[score] || '#00d084') : 'rgba(255,255,255,.07)';
             });
         }
