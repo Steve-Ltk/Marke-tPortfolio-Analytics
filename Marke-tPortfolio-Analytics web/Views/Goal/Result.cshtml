@@ -37,6 +37,16 @@
     <a href="/Goal/Wizard?step=3" class="btn btn-ghost">← Modifier</a>
 </div>
 
+<div class="insight-box" style="margin-bottom:12px;max-width:900px">
+    <strong>ℹ️ Simulation estimée</strong><br>
+    <span style="font-size:13px">
+        Projection basée sur des paramètres estimés
+        (CAGR ~@t.CagrEstime%/an, volatilité ~@t.VolatiliteEstimee%).
+        Une fois le portefeuille créé, <strong>Analytics → Monte Carlo</strong>
+        utilisera vos données historiques réelles.
+    </span>
+</div>
+
 <div class="insight-box @(insight.Niveau == "Danger" ? "danger" : insight.Niveau == "Insuffisant" ? "warning" : "")"
      style="margin-bottom:20px;max-width:900px">
     <strong style="color:@insight.Couleur">@insight.Niveau</strong> —
