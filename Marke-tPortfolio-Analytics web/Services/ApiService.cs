@@ -342,7 +342,7 @@ namespace Marke_tPortfolio_Analytics_web.Services
 
         // Analyse complète d'un portefeuille sur une période
         public Task<PortfolioAnalyticsResult?> AnalyzePortfolioAsync(
-            int portfolioId, DateTime from, DateTime to, double riskFreeRate = 0.03)
+            int portfolioId, DateTime from, DateTime to, double riskFreeRate = 0.045)
             => GetAsync<PortfolioAnalyticsResult>(
                 $"api/Analytics/portfolios/{portfolioId}/analyze" +
                 $"?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&riskFreeRate={riskFreeRate.ToString(CultureInfo.InvariantCulture)}");
