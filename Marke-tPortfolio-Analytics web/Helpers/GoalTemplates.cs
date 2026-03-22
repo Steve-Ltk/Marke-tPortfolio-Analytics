@@ -40,7 +40,7 @@
                 new("MSFT",   15m, "#3b82f6"),
                 new("OR.PA",  10m, "#8b5cf6"),
                 new("TTE.PA", 10m, "#f59e0b"),
-                new("OAT",    50m, "#94a3b8"),
+                new("JNJ",    50m, "#94a3b8"),,
             }
         );
 
@@ -56,7 +56,7 @@
                 new("AAPL",   20m, "#00d084"),
                 new("OR.PA",  15m, "#8b5cf6"),
                 new("TTE.PA", 15m, "#f59e0b"),
-                new("OAT",    25m, "#94a3b8"),
+                new("JNJ",    50m, "#94a3b8"),
             }
         );
 
