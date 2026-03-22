@@ -2,10 +2,7 @@
 
 namespace Marke_tPortfolio_Analytics_web.ViewModels
 {
-    // ════════════════════════════════════════════════════════════════════
-    // CRÉATION
-    // ════════════════════════════════════════════════════════════════════
-
+    // ViewModel du formulaire d'ajout de position
     public class PositionCreateViewModel
     {
         public int PortfolioId { get; set; }
@@ -20,32 +17,31 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Quantité")]
         public decimal Quantity { get; set; }
 
-        /// <summary>✅ Correspond à Position.AvgBuyPrice</summary>
         [Required(ErrorMessage = "Le prix d'achat est obligatoire.")]
         [Range(0.0001, double.MaxValue, ErrorMessage = "Le prix doit être > 0.")]
         [Display(Name = "Prix d'achat moyen")]
         public decimal AvgBuyPrice { get; set; }
 
-        /// <summary>✅ Correspond à Position.BuyDate</summary>
+        /// AvgBuyPrice -> prix moyen d'achat en devise NATIVE de l'actif
+        // Stocké tel quel en base -> la conversion EUR se fait à l'affichage
         [Required(ErrorMessage = "La date d'achat est obligatoire.")]
         [Display(Name = "Date d'achat")]
         [DataType(DataType.Date)]
         public DateTime BuyDate { get; set; } = DateTime.Today;
-
+        
+        // Liste des actifs pour le menu déroulant du formulaire
+        // Chargée dans PositionsController.Create (GET)
         public List<AssetSelectItem> Assets { get; set; } = new();
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // ÉDITION — clé composite (PortfolioId + AssetId), PAS d'Id simple
-    // ════════════════════════════════════════════════════════════════════
-
+    // ViewModel du formulaire de modification de position
+    // Clé composite (PortfolioId + AssetId) -> pas d'Id simple
     public class PositionEditViewModel
     {
-        /// <summary>✅ 1ère partie de la clé composite</summary>
         public int PortfolioId { get; set; }
-        /// <summary>✅ 2ème partie de la clé composite</summary>
         public int AssetId { get; set; }
-
+        
+        // Infos d'affichage -> pas modifiables dans ce formulaire
         public string PortfolioName { get; set; } = string.Empty;
         public string AssetTicker { get; set; } = string.Empty;
         public string AssetNom { get; set; } = string.Empty;
@@ -55,20 +51,19 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
         [Display(Name = "Quantité")]
         public decimal Quantity { get; set; }
 
-        /// <summary>✅ Correspond à Position.AvgBuyPrice</summary>
         [Required(ErrorMessage = "Le prix d'achat est obligatoire.")]
         [Range(0.0001, double.MaxValue, ErrorMessage = "Le prix doit être > 0.")]
         [Display(Name = "Prix d'achat moyen")]
         public decimal AvgBuyPrice { get; set; }
 
-        /// <summary>✅ Correspond à Position.BuyDate</summary>
         [Required(ErrorMessage = "La date d'achat est obligatoire.")]
         [Display(Name = "Date d'achat")]
         [DataType(DataType.Date)]
         public DateTime BuyDate { get; set; }
     }
 
-    // ── Select actifs ─────────────────────────────────────────────────
+    // Item de sélection dans le menu déroulant de création de position
+    // Version allégée d'Asset -> que les champs nécessaires pour le <select>
     public class AssetSelectItem
     {
         public int Id { get; set; }
