@@ -5,8 +5,10 @@
     ViewData["Section"] = "Analytics";
 }
 
+@* data-portfolio-id -> lu par analytics.js pour les appels AJAX *@
 <div id="analytics-root" data-portfolio-id="@Model.SelectedPortfolioId"></div>
 
+@* Formulaire de sélection portefeuille + période + taux sans risque *@
 <div class="page-header">
     <div>
         <div class="page-title">Analytics</div>
@@ -29,16 +31,17 @@
     return;
 }
 
-<!-- Sélecteur + paramètres -->
 <div class="card" style="margin-bottom:20px">
     <form method="get" asp-action="Index" asp-controller="Analytics"
           style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+        @* Sélecteur de portefeuille -> onchange soumet le formulaire automatiquement *@
         <div style="flex:1;min-width:200px">
             <label style="font-size:11px;font-weight:600;color:var(--t4);letter-spacing:.08em;
                           text-transform:uppercase;display:block;margin-bottom:6px">Portefeuille</label>
             <select name="portfolioId" class="form-control" onchange="this.form.submit()">
                 @foreach (var p in Model.Portfolios)
                 {
+                    @* "selected" -> met en valeur le portefeuille actuellement sélectionné *@
                     if (p.Id == Model.SelectedPortfolioId)
                     {
                         <option value="@p.Id" selected>@p.Name</option>
@@ -50,6 +53,7 @@
                 }
             </select>
         </div>
+        @* Période d'analyse *@
         <div>
             <label style="font-size:11px;font-weight:600;color:var(--t4);letter-spacing:.08em;
                           text-transform:uppercase;display:block;margin-bottom:6px">Période</label>
@@ -60,6 +64,8 @@
                        value="@Model.DateFin.ToString("yyyy-MM-dd")" style="width:150px" />
             </div>
         </div>
+
+        @* Taux sans risque en % -> converti en décimal (/ 100) dans le controller *@
         <div>
             <label style="font-size:11px;font-weight:600;color:var(--t4);letter-spacing:.08em;
                           text-transform:uppercase;display:block;margin-bottom:6px">Taux sans risque %</label>
@@ -71,10 +77,10 @@
     </form>
 </div>
 
+@* Si pas encore analysé -> message d'invite *@
 @if (!Model.HasResult)
 {
     <div style="text-align:center;padding:60px 0;color:var(--t4)">
-        <div style="font-size:36px;margin-bottom:16px">🔢</div>
         <div style="font-size:15px;margin-bottom:8px;font-weight:600;color:var(--t2)">
             Sélectionnez un portefeuille et cliquez sur Analyser
         </div>
@@ -86,16 +92,16 @@
     var a = Model.Analyse!;
 }
 
-<!-- Insight global -->
 <div class="insight-box @(Model.InsightNiveau == "Danger" ? "danger" : Model.InsightNiveau == "Insuffisant" ? "warning" : "")"
      style="margin-bottom:20px">
     @Model.InsightGlobal
 </div>
 
-<!-- KPIs principaux -->
+@* 4 KPIs principaux *@
 <div class="kpi-grid" style="margin-bottom:20px">
     <div class="kpi" style="--accent:var(--green)">
         <div class="kpi-label">Rendement annualisé</div>
+        @* AnnualizedReturn déjà en % depuis le backend -> pas de × 100 *@
         <div class="kpi-val @(a.AnnualizedReturn >= 0 ? "green" : "red")">
             @(a.AnnualizedReturn >= 0 ? "+" : "")@a.AnnualizedReturn.ToString("F2")%
         </div>
@@ -136,10 +142,11 @@
     </div>
 </div>
 
-<!-- Onglets — gérés par analytics.js via data-tab-trigger / data-tab-panel -->
+@* Onglets — gérés par analytics.js via data-tab-trigger / data-tab-panel *@
 <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--dark-3);
             border-radius:var(--radius-md);padding:4px;border:1px solid var(--border);
             width:fit-content">
+    @* data-tab-trigger -> analytics.js écoute ces attributs pour changer l'onglet *@
     <button class="tab-btn active" data-tab-trigger="insights">Insights</button>
     <button class="tab-btn" data-tab-trigger="montecarlo">Monte Carlo</button>
     <button class="tab-btn" data-tab-trigger="backtest">Backtest</button>
@@ -147,7 +154,8 @@
     <button class="tab-btn" data-tab-trigger="comparaison">Comparaison</button>
 </div>
 
-<!-- Partials — tous chargés dans le DOM, affichage géré par analytics.js -->
+@* Partials — tous chargés dans le DOM au démarrage *@
+@* analytics.js affiche/masque via data-tab-panel *@
 <div data-tab-panel="insights">
     @await Html.PartialAsync("_Insights", Model)
 </div>
