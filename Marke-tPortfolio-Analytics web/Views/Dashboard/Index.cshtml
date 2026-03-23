@@ -7,8 +7,7 @@
 
 @* Écran d'onboarding si l'user n'a pas encore de portefeuille *@
 @if (!Model.HasPortfolios)
-{ 
-    @* contenu onboarding *@
+{
     <div class="page-header">
         <div>
             <div class="page-title">Bonjour, @Model.UserName </div>
@@ -16,10 +15,10 @@
         </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
-                    min-height:400px;text-align:center;gap:24px">
+                min-height:400px;text-align:center;gap:24px">
         <div style="width:80px;height:80px;background:var(--green-faint);
-                        border:1px solid rgba(0,208,132,.2);border-radius:50%;
-                        display:flex;align-items:center;justify-content:center;font-size:32px">
+                    border:1px solid rgba(0,208,132,.2);border-radius:50%;
+                    display:flex;align-items:center;justify-content:center;font-size:32px">
             📊
         </div>
         <div>
@@ -48,26 +47,16 @@
     </div>
 </div>
 
-@* Page principale — rendue uniquement si l'user a au moins un portefeuille *@
-
 @* Score Investisseur — bandeau en haut avec la jauge SVG *@
 <div class="score-banner">
     <div class="score-ring">
         <svg viewBox="0 0 80 80">
-            @* Cercle de fond gris — toujours plein *@
             <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="7" />
-
-            @* Cercle de progression coloré
-               stroke-dasharray="213.6" -> circonférence totale du cercle (2πr)
-               stroke-dashoffset -> portion non colorée
-               ScoreOffset = 0 -> cercle plein (100/100)
-               ScoreOffset = 213.6 -> cercle vide (0/100) *@
             <circle cx="40" cy="40" r="34" fill="none" stroke="@Model.ScoreCouleur" stroke-width="7"
                     stroke-dasharray="213.6"
                     stroke-dashoffset="@Model.ScoreOffset.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)"
                     stroke-linecap="round" />
         </svg>
-        @* Score affiché au centre de la jauge *@
         <div class="score-ring-num">
             <strong style="color:@Model.ScoreCouleur">@Model.ScoreInvestisseur</strong>
             <span>/100</span>
@@ -76,10 +65,11 @@
     <div class="score-info">
         <h3>Score Investisseur · @Model.ScoreNiveau</h3>
         <p>@Model.ScoreMessage</p>
-        @* Pills — badges de détail du score (max 4 affichés) *@
         <div class="score-pills">
             @foreach (var pill in Model.ScorePills)
             {
+                @* CORRECTION -> ajout de "Actions uniquement" dans pill-red
+            car "Mono-actif" a été renommé en "Actions uniquement" dans le controller *@
                 <span class="pill @(
                     pill.Contains("Efficient") ||
                     pill.Contains("Diversifié") ||
@@ -89,9 +79,10 @@
                         ? "pill-green"
                     : pill.Contains("Sous-optimal") ||
                       pill.Contains("Concentré") ||
+                      pill.Contains("Actions uniquement") ||
                       pill.Contains("Mono-actif") ||
                       pill.Contains("Sans obligataire")
-                        ? "pill-red" 
+                        ? "pill-red"
                     : "pill-amber")">
                     @pill
                 </span>
@@ -100,21 +91,17 @@
     </div>
 </div>
 
-@* KPIs — 4 métriques clés en ligne *@
+@* KPIs *@
 <div class="kpi-grid">
-    @* KPI Valeur totale *@
     <div class="kpi" style="--accent:var(--green)">
         <div class="kpi-label">Valeur totale</div>
         <div class="kpi-val green">€@Model.ValeurTotaleEur.ToString("N0")</div>
-         @* RendementTotal -> couleur selon signe *@
         <div class="kpi-delta @(Model.RendementTotal >= 0 ? "up" : "dn")">
             @(Model.RendementTotal >= 0 ? "▲" : "▼") @Math.Abs(Model.RendementTotal).ToString("F1")% depuis achat
         </div>
-        @* Valeur en USD + taux pour référence *@
         <div class="kpi-sub">$@Model.ValeurTotaleUsd.ToString("N0") · taux @Model.TauxEurUsd.ToString("F3")</div>
     </div>
 
-     @* KPI Rendement total *@
     <div class="kpi" style="--accent:var(--blue)">
         <div class="kpi-label">Rendement total</div>
         <div class="kpi-val @(Model.RendementTotal >= 0 ? "green" : "red")">
@@ -124,30 +111,26 @@
         <div class="kpi-sub">@Model.NbPortfolios portefeuille(s) · @Model.Positions.Count position(s)</div>
     </div>
 
-    @* KPI Sharpe Ratio — affiché seulement si on a assez d'historique *@
     <div class="kpi" style="--accent:var(--amber)">
         <div class="kpi-label">Sharpe Ratio</div>
         @if (Model.HasMetriquesAnalytiques)
         {
-            @* Couleur selon le niveau du Sharpe *@
             <div class="kpi-val @(Model.SharpeRatio > 1 ? "green" : Model.SharpeRatio > 0 ? "amber" : "red")">
                 @Model.SharpeRatio.ToString("F2")
             </div>
             <div class="kpi-delta" style="color:var(--t4)">
                 @(Model.SharpeRatio > 2 ? "Excellent" : Model.SharpeRatio > 1 ? "Bon" :
-                            Model.SharpeRatio > 0 ? "Insuffisant" : "Danger")
-        </div>
-        <div class="kpi-sub">Seuil excellent : > 2</div>
-                }
+                    Model.SharpeRatio > 0 ? "Insuffisant" : "Danger")
+            </div>
+            <div class="kpi-sub">Seuil excellent : > 2</div>
+        }
         else
         {
-            @* Pas assez d'historique -> on affiche "—" plutôt que 0 *@
             <div class="kpi-val" style="color:var(--t4)">—</div>
             <div class="kpi-sub">Historique insuffisant (moins d'1 an)</div>
         }
     </div>
 
-    @* KPI Score investisseur *@
     <div class="kpi" style="--accent:var(--purple)">
         <div class="kpi-label">Score</div>
         <div class="kpi-val" style="color:@Model.ScoreCouleur">
@@ -170,42 +153,50 @@
         @if (Model.Allocation.Any())
         {
             <div style="display:flex;align-items:center;gap:24px">
-                @* SVG donut construit manuellement avec des cercles SVG *@
                 <svg viewBox="0 0 110 110" style="width:110px;height:110px;flex-shrink:0">
                     @{
-                         @* circonférence du cercle SVG du donut *@
-                        double cumul = 0; double circ = 251.2;
+                        double cumul = 0;
+                        double circ = 251.2; // 2 × π × r = 2 × π × 40
                     }
-                     @* Cercle de fond gris *@
                     <circle cx="55" cy="55" r="40" fill="none" stroke="var(--dark-4)" stroke-width="18" />
 
-                    @* Un arc par actif dans l'allocation *@
                     @foreach (var item in Model.Allocation)
                     {
-
-                        @* Rotation -> positionne l'arc après le précédent *@
                         double rot = -90 + (cumul / 100 * 360);
-                        <circle cx="55" cy="55" r="40" fill="none" stroke="@item.Couleur" stroke-width="18"
-                                stroke-dasharray="@circ"
-                                stroke-dashoffset="@(circ - circ * (double)item.Poids / 100)"
-                                transform="rotate(@rot.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) 55 55)" />
+
+                        @* CORRECTION -> dashoffset avec InvariantCulture
+                Sans ça, la culture FR génère "188,4" au lieu de "188.4"
+                SVG ignore les valeurs avec virgule -> arcs de taille incorrecte *@
+                        <circle cx="55" cy="55" r="40" fill="none"
+                                stroke="@item.Couleur"
+                                stroke-width="18"
+                                stroke-dasharray="@circ.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)"
+                                stroke-dashoffset="@((circ - circ * (double)item.Poids / 100).ToString("F4", System.Globalization.CultureInfo.InvariantCulture))"
+                                transform="rotate(@rot.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) 55 55)" />
+
                         cumul += (double)item.Poids;
                     }
 
-                    @* Texte au centre du donut *@
-                    <text x="55" y="51" text-anchor="middle" fill="white" font-family="Sora" font-size="13" font-weight="800">@Model.Positions.Count</text>
-                    <text x="55" y="63" text-anchor="middle" fill="#475569" font-family="DM Sans" font-size="8">actifs</text>
+                    <text x="55" y="51" text-anchor="middle" fill="white"
+                          font-family="Sora" font-size="13" font-weight="800">
+                        @Model.Positions.Count
+                    </text>
+                    <text x="55" y="63" text-anchor="middle" fill="#475569"
+                          font-family="DM Sans" font-size="8">
+                        actifs
+                    </text>
                 </svg>
 
-                @* Légende du donut *@
                 <div style="flex:1;display:flex;flex-direction:column;gap:8px">
                     @foreach (var item in Model.Allocation)
                     {
                         <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3)">
-                            @* Pastille colorée *@
-                            <div style="width:8px;height:8px;border-radius:50%;background:@item.Couleur;flex-shrink:0"></div>
+                            <div style="width:8px;height:8px;border-radius:50%;
+                                        background:@item.Couleur;flex-shrink:0"></div>
                             @item.Ticker
-                            <span style="margin-left:auto;font-weight:600;color:var(--t1)">@item.Poids.ToString("F1")%</span>
+                            <span style="margin-left:auto;font-weight:600;color:var(--t1)">
+                                @item.Poids.ToString("F1")%
+                            </span>
                         </div>
                     }
                 </div>
@@ -221,27 +212,31 @@
         <div class="card-header"><div class="card-title">Résumé</div></div>
         <div style="display:flex;flex-direction:column;gap:0">
             @foreach (var (label, val, color) in new[]
-                        {
-                        ("Portefeuilles", Model.NbPortfolios.ToString(),                    ""),
-                        ("Positions",     Model.Positions.Count.ToString(),                 ""),
-                        ("Valeur EUR",    "€" + Model.ValeurTotaleEur.ToString("N2"),       "var(--green)"),
-                        ("Valeur USD",    "$" + Model.ValeurTotaleUsd.ToString("N2"),       ""),
-                        ("Taux EUR/USD",  Model.TauxEurUsd.ToString("F4"),                  ""),
-                        })
             {
-                <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-2)">
+            ("Portefeuilles", Model.NbPortfolios.ToString(),               ""),
+            ("Positions",     Model.Positions.Count.ToString(),            ""),
+            ("Valeur EUR",    "€" + Model.ValeurTotaleEur.ToString("N2"), "var(--green)"),
+            ("Valeur USD",    "$" + Model.ValeurTotaleUsd.ToString("N2"), ""),
+            ("Taux EUR/USD",  Model.TauxEurUsd.ToString("F4"),            ""),
+            })
+            {
+                <div style="display:flex;justify-content:space-between;
+                            padding:10px 0;border-bottom:1px solid var(--border-2)">
                     <span style="font-size:13px;color:var(--t4)">@label</span>
-                    <span style="font-weight:700;@(string.IsNullOrEmpty(color) ? "" : $"color:{color}")">@val</span>
+                    <span style="font-weight:700;@(string.IsNullOrEmpty(color) ? "" : $"color:{color}")">
+                        @val
+                    </span>
                 </div>
             }
         </div>
-        <a href="/Analytics" class="btn btn-green btn-full" style="margin-top:16px;height:40px;font-size:13px">
+        <a href="/Analytics" class="btn btn-green btn-full"
+           style="margin-top:16px;height:40px;font-size:13px">
             Analyse complète →
         </a>
     </div>
 </div>
 
-@* Tableau de toutes les positions triées par valeur décroissante *@
+@* Tableau de toutes les positions *@
 @if (Model.Positions.Any())
 {
     <div class="card">
@@ -281,13 +276,15 @@
                                 @(pos.PnlPct >= 0 ? "+" : "")@pos.PnlPct.ToString("F2")%
                             </td>
                             <td>
-
-                                @* Barre de progression proportionnelle au poids *@
                                 <div style="display:flex;align-items:center;gap:8px">
                                     <div class="metric-bar-wrap" style="width:60px">
-                                        <div class="metric-bar" style="width:@pos.Poids.ToString("F0")%;background:var(--green)"></div>
+                                        <div class="metric-bar"
+                                             style="width:@pos.Poids.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)%;
+                                                    background:var(--green)"></div>
                                     </div>
-                                    <span style="font-size:11px;color:var(--t4)">@pos.Poids.ToString("F1")%</span>
+                                    <span style="font-size:11px;color:var(--t4)">
+                                        @pos.Poids.ToString("F1")%
+                                    </span>
                                 </div>
                             </td>
                         </tr>

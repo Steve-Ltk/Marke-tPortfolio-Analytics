@@ -88,7 +88,8 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             => GetUserId() ?? throw new UnauthorizedAccessException("Session expirée.");
 
         // "public static" = accessible sans instance -> AuthController peut l'appeler
-        // directement via "BaseController.SetSession(...)" sans hériter de BaseController public static void SetSession(ISession session, int userId, string userName, string email)
+        // directement via "BaseController.SetSession(...)" sans hériter de BaseController
+        public static void SetSession(ISession session, int userId, string userName, string email)
         {
             session.SetInt32(SessionKeyUserId, userId);
             session.SetString(SessionKeyUserName, userName);

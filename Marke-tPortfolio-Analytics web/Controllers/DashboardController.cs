@@ -21,24 +21,19 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            // GetUserId() vient de BaseController -> lit la session
             int userId = GetUserId() ?? 0;
-
-            // Sécurité : si pas d'userId en session -> redirect Login
             if (userId == 0) return RedirectToAction("Login", "Auth");
 
-            // Charge les portefeuilles et le taux EUR/USD en parallèle
             var portfolios = await ApiService.GetPortfoliosByUserAsync(userId);
             var taux = await ApiService.GetExchangeRateAsync("EUR", "USD");
 
             var vm = new DashboardViewModel
             {
-                UserName = GetUserName(), // depuis la session via BaseController
+                UserName = GetUserName(),
                 TauxEurUsd = taux,
                 Portfolios = portfolios
             };
 
-            // Pas de portefeuilles -> affiche l'écran d'onboarding vide
             if (!portfolios.Any())
             {
                 vm.ScoreInvestisseur = 0;
@@ -50,7 +45,6 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             var allPositions = new List<PositionDashboard>();
             decimal valeurTotale = 0m;
 
-            // Parcourt chaque portefeuille et chaque position pour calculer la valeur totale
             foreach (var portfolio in portfolios)
             {
                 var positions = await ApiService.GetPositionsByPortfolioAsync(portfolio.Id);
@@ -58,26 +52,17 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
 
                 foreach (var pos in positions)
                 {
-                    // Récupère l'actif pour avoir sa devise (USD ou EUR)
                     var asset = await ApiService.GetAssetByIdAsync(pos.AssetId);
                     if (asset == null) continue;
 
-                    // Prix actuel -> si FMP ne répond pas, on utilise le prix d'achat
                     var latestPrice = await ApiService.GetLatestPriceAsync(asset.Ticker);
                     decimal prixActuel = latestPrice ?? pos.AvgBuyPrice;
-
-                    // IsUsd -> true si l'actif est coté en USD (via AssetHelper)
                     bool isUsd = AssetHelper.IsUsd(asset);
-                    // Valeur en devise native (ex: 10 actions AAPL × 182$ = 1820$)
                     decimal valDev = prixActuel * pos.Quantity;
-                    // Conversion en EUR si l'actif est en USD
                     decimal valEur = isUsd && taux > 0 ? valDev / taux : valDev;
-                    // Coût d'achat converti en EUR pour calculer le P&L
                     decimal coutEur = isUsd && taux > 0
                         ? pos.AvgBuyPrice * pos.Quantity / taux
                         : pos.AvgBuyPrice * pos.Quantity;
-
-                    // P&L en % -> (valeur actuelle / coût - 1) × 100
                     decimal pnlPct = coutEur > 0 ? (valEur / coutEur - 1) * 100 : 0;
 
                     valeurTotale += valEur;
@@ -92,50 +77,58 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                         ValeurEur = Math.Round(valEur, 2),
                         PnlPct = Math.Round(pnlPct, 2),
                         Devise = isUsd ? "USD" : "EUR",
-                        TypeActif = AssetHelper.GetTypeLabel(asset) // "Stock" ou "Bond"
+                        TypeActif = AssetHelper.GetTypeLabel(asset)
                     });
                 }
             }
 
             vm.ValeurTotaleEur = Math.Round(valeurTotale, 2);
-            // Conversion valeur totale en USD pour l'affichage dual-devise
-            vm.ValeurTotaleUsd = taux > 0 ? Math.Round(valeurTotale * taux, 2) : valeurTotale;
+            vm.ValeurTotaleUsd = taux > 0
+                ? Math.Round(valeurTotale * taux, 2)
+                : valeurTotale;
 
-            // Calcule le poids de chaque position dans le portefeuille total
             foreach (var p in allPositions)
                 p.Poids = valeurTotale > 0
-                    ? Math.Round(p.ValeurEur / valeurTotale * 100, 1) : 0;
+                    ? Math.Round(p.ValeurEur / valeurTotale * 100, 1)
+                    : 0;
 
             vm.Positions = allPositions;
 
-            // Coût total d'achat (toutes positions confondues, en EUR)
             decimal coutTotal = allPositions.Sum(p =>
                 p.Devise == "USD" && taux > 0
                     ? p.Quantite * p.AvgBuyPrice / taux
                     : p.Quantite * p.AvgBuyPrice);
 
-            // Rendement total depuis l'achat en %
             vm.RendementTotal = coutTotal > 0
-                ? Math.Round((valeurTotale / coutTotal - 1) * 100, 2) : 0;
+                ? Math.Round((valeurTotale / coutTotal - 1) * 100, 2)
+                : 0;
 
-            // Allocation -> top 6 positions par valeur pour le graphique donut
+            // CORRECTION 1 -> regroupe par ticker avant de construire le donut
+            // Sans ça : si AAPL est dans 2 portefeuilles, il apparaît 2 fois
+            // dans la légende et les arcs se superposent -> donut incorrect
             vm.Allocation = allPositions
-                .OrderByDescending(p => p.ValeurEur)
-                .Take(6)
-                .Select((p, i) => new AllocationItem
+                .GroupBy(p => p.Ticker)
+                .Select(g => new
                 {
-                    Ticker = p.Ticker,
-                    Poids = p.Poids,
+                    Ticker = g.Key,
+                    ValeurEur = g.Sum(p => p.ValeurEur)
+                })
+                .OrderByDescending(g => g.ValeurEur)
+                .Take(6)
+                .Select((g, i) => new AllocationItem
+                {
+                    Ticker = g.Ticker,
+                    Poids = valeurTotale > 0
+                        ? Math.Round(g.ValeurEur / valeurTotale * 100, 1)
+                        : 0,
                     Couleur = DonutColors[i % DonutColors.Length]
                 }).ToList();
 
-            // Sharpe et MaxDrawdown réels depuis le backend Analytics
-            // Moyenne pondérée par valeur de marché de chaque portefeuille
             await ChargerMetriquesAnalytiques(vm, portfolios, valeurTotale);
 
-            // Score investisseur
+            // ── Score investisseur ────────────────────────────────────────────
             int score = 20;
-            var pills = new List<string>(); // badges affichés sous le score
+            var pills = new List<string>();
 
             if (vm.SharpeRatio > 1)
             { score += 25; pills.Add($"Sharpe Ratio: {vm.SharpeRatio:F2} · Efficient"); }
@@ -150,15 +143,25 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             if (allPositions.Select(p => p.TypeActif).Distinct().Count() >= 2)
             { score += 10; pills.Add("Allocation · Multi-actifs"); }
             else
-                pills.Add("Allocation · Mono-actif"),
+                // CORRECTION 2 -> renommé "Mono-actif" en "Actions uniquement"
+                // "Mono-actif" était trompeur avec "5 actifs · Diversifié" juste à côté
+                // "Actions uniquement" décrit mieux la réalité : une seule classe d'actifs
+                pills.Add("Allocation · Actions uniquement");
 
-            if (allPositions.Any(p => p.TypeActif == "Bond"))
-            { score += 10; pills.Add("Allocation · Exposition obligataire"); }
+            // CORRECTION 3 -> vérification obligataire élargie
+            // JNJ, KO, XOM jouent le rôle d'ancre défensive dans les templates
+            // mais sont importés comme Stock via FMP (pas comme Bond)
+            // -> on les reconnaît explicitement comme actifs défensifs
+            if (allPositions.Any(p => p.TypeActif == "Bond"
+                || p.Ticker == "JNJ"
+                || p.Ticker == "KO"
+                || p.Ticker == "XOM"))
+            { score += 10; pills.Add("Allocation · Exposition défensive"); }
             else
-                pills.Add("Allocation • Sans obligataire");
+                pills.Add("Allocation · Sans actif défensif");
 
             if (vm.RendementTotal > 4)
-            { score += 20; pills.Add($"+{vm.RendementTotal:F1}% · Au-dessus de l’inflation"); }
+            { score += 20; pills.Add($"+{vm.RendementTotal:F1}% · Au-dessus de l'inflation"); }
             else
                 pills.Add($"{vm.RendementTotal:F1}% · Modéré");
 
@@ -172,6 +175,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                 < 85 => "Solide",
                 _ => "Exemplaire"
             };
+
             vm.ScoreMessage = vm.ScoreInvestisseur switch
             {
                 < 40 => "Le portefeuille présente une diversification insuffisante et une efficacité risque/rendement limitée.",
@@ -183,19 +187,15 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             return View(vm);
         }
 
-        // Sharpe et MaxDrawdown pondérés depuis le backend
+        // Sharpe et MaxDrawdown pondérés depuis le backend.
         // Pour chaque portefeuille, on appelle l'API Analytics sur 1 an.
-        // On pondère Sharpe et MaxDrawdown par la valeur de marché de chaque
-        // portefeuille, pour obtenir des métriques globales cohérentes.
-        //
-        // Si l'API ne retourne rien (pas assez d'historique), on affiche 0
-        // plutôt qu'une valeur inventée.
+        // On pondère par la valeur de marché -> métriques globales cohérentes.
+        // Si l'API ne retourne rien (pas assez d'historique) -> on affiche 0.
         private async Task ChargerMetriquesAnalytiques(
             DashboardViewModel vm,
             List<MarketPortfolioAnalytics.Models.Portfolio> portfolios,
             decimal valeurTotale)
         {
-            // Rien à calculer si pas de valeur ou pas de portefeuilles
             if (valeurTotale <= 0 || !portfolios.Any())
             {
                 vm.SharpeRatio = 0;
@@ -204,9 +204,9 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             }
 
             var dateFin = DateTime.UtcNow;
-            var dateDebut = dateFin.AddYears(-1); // analyse sur 1 an glissant
+            var dateDebut = dateFin.AddYears(-1);
 
-            double sharpeePondere = 0;
+            double sharpePondere = 0;
             double maxDrawdownPondere = 0;
             decimal valeurAnalysee = 0;
 
@@ -214,24 +214,20 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             {
                 try
                 {
-                    // Appelle le backend Analytics pour ce portefeuille
                     var analyse = await ApiService.AnalyzePortfolioAsync(
                         portfolio.Id, dateDebut, dateFin, riskFreeRate: 0.045);
 
                     if (analyse == null) continue;
 
-                    // Valeur du portefeuille -> utilisée comme poids dans la moyenne
                     decimal poidsPortfolio = analyse.TotalCurrentValue;
                     if (poidsPortfolio <= 0) continue;
 
-                    // Accumule les métriques pondérées par valeur de marché
-                    sharpeePondere += analyse.SharpeRatio * (double)poidsPortfolio;
+                    sharpePondere += analyse.SharpeRatio * (double)poidsPortfolio;
                     maxDrawdownPondere += analyse.MaxDrawdown * (double)poidsPortfolio;
                     valeurAnalysee += poidsPortfolio;
                 }
                 catch (Exception ex)
                 {
-                    // Si un portefeuille plante -> on l'ignore et on continue
                     Logger.LogWarning(ex,
                         "Impossible de charger les métriques analytiques pour le portefeuille {Id}",
                         portfolio.Id);
@@ -240,15 +236,13 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
 
             if (valeurAnalysee > 0)
             {
-                // Moyenne pondérée = somme(métrique × poids) / somme(poids)
                 vm.SharpeRatio = Math.Round(
-                    (decimal)(sharpeePondere / (double)valeurAnalysee), 2);
+                    (decimal)(sharpePondere / (double)valeurAnalysee), 2);
                 vm.MaxDrawdown = Math.Round(
                     (decimal)(maxDrawdownPondere / (double)valeurAnalysee), 2);
             }
             else
             {
-                // Pas assez d'historique — on affiche 0 plutôt qu'une valeur inventée
                 vm.SharpeRatio = 0;
                 vm.MaxDrawdown = 0;
             }

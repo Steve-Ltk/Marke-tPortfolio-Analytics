@@ -943,6 +943,7 @@ tbody tr:last-child td {
     box-sizing: border-box;
 }
 
+
     .form-control:focus {
         border-color: var(--green);
         background: rgba(0,208,132,.04);
@@ -971,7 +972,18 @@ select.form-control {
     background-repeat: no-repeat;
     background-position: right 14px center;
     cursor: pointer;
+    color-scheme: dark;
 }
+
+select.form-control option {
+        background: var(--dark-4);
+        color: var(--t1);
+ }
+
+ select.form-control option:checked {
+            background: var(--dark-3);
+            color: var(--t1);
+  }
 
 /* ══════════════════════════════════════════════════════════════════════
    INSIGHT BOXES

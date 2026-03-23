@@ -10,7 +10,9 @@ namespace MarketPortfolioAnalytics.Services
     // Répond à : "dans 1 an, quelle est la valeur probable de mon portefeuille ?"
     // Utilise PortfolioAnalyticsService pour charger les prix et construire la série historiqueeCarloService
     // Claude IA ( ressource ) 
+    public class MonteCarloService
     {
+
         private readonly MarketPortfolioAnalyticsContext _context;
         private readonly PortfolioAnalyticsService _analytics;
 
@@ -43,7 +45,7 @@ namespace MarketPortfolioAnalytics.Services
             var positions = portfolio.ListePositions?.ToList()
                             ?? new List<Position>();
 
-            if (positions.Count == 0) return null
+            if (positions.Count == 0) return null;
 
             var assetIds = positions.Select(p => p.AssetId).ToList();
             // Charge les prix historiques (auto-fetch FMP si manquants)

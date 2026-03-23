@@ -17,7 +17,8 @@ namespace Marke_tPortfolio_Analytics_web.ViewModels
 
         // URL de retour après connexion réussie
         // Ex : l'user essaie /Portfolios -> redirigé vers Login -> après connexion retourne /Portfolios
-        // Url.IsLocalUrl() vérifie que c'est une URL locale avant de rediriger        public string? ReturnUrl { get; set; }
+        // Url.IsLocalUrl() vérifie que c'est une URL locale avant de rediriger
+        public string? ReturnUrl { get; set; }
     }
 
     // ViewModel du formulaire d'inscription

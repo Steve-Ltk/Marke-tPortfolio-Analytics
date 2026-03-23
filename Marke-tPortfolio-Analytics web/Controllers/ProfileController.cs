@@ -86,9 +86,27 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
             string NewPassword = "",
             string ConfirmPassword = "")
         {
+            if (string.IsNullOrWhiteSpace(CurrentPassword))
+            {
+                TempData["PwdError"] = "Le mot de passe actuel est requis.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (string.IsNullOrWhiteSpace(NewPassword))
+            {
+                TempData["PwdError"] = "Le nouveau mot de passe est requis.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (NewPassword.Length < 8)
+            {
+                TempData["PwdError"] = "Le nouveau mot de passe doit contenir au moins 8 caractères.";
+                return RedirectToAction(nameof(Index));
+            }
+
             if (NewPassword != ConfirmPassword)
             {
-                TempData["PwdError"] = "Les mots de passe ne correspondent pas.";
+                TempData["PwdError"] = "La confirmation ne correspond pas au nouveau mot de passe.";
                 return RedirectToAction(nameof(Index));
             }
 
@@ -103,6 +121,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
 
             if (!ok)
             {
+                // false = mot de passe actuel incorrect (vérifié par PasswordHasher côté backend)
                 TempData["PwdError"] = "Mot de passe actuel incorrect.";
                 return RedirectToAction(nameof(Index));
             }

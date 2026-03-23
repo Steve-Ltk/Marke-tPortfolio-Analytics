@@ -39,6 +39,9 @@ builder.Services.AddScoped<BacktestService>();
 builder.Services.AddControllers();
 
 
+builder.Services.AddEndpointsApiExplorer(); // <- "utilise le générateur Swagger du conteneur"
+builder.Services.AddSwaggerGen(); // "utilise la politique CORS du conteneur"
+
 // Pipeline = chaîne de montage que chaque requête HTTP traverse dans l'ordre.
 // L'ordre est obligatoire — ne pas changer.
 // Swagger uniquement en Development → pas exposé en production.
@@ -46,7 +49,7 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// Swagger — uniquement en développement ─────────────────────────────────────
+// Swagger — uniquement en développement 
 // En production, Swagger est désactivé pour ne pas exposer la documentation
 if (app.Environment.IsDevelopment())
 {
@@ -77,7 +80,7 @@ using (var scope = app.Services.GetRequiredService<IServiceScopeFactory>().Creat
     var context = scope.ServiceProvider
         .GetRequiredService<MarketPortfolioAnalyticsContext>();
 
-    //context.Database.EnsureDeleted();
+    context.Database.EnsureDeleted();
     context.Database.EnsureCreated();
 
 }

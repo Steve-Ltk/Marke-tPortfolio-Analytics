@@ -1,5 +1,6 @@
 ﻿using System.Net.Http.Json;
 using System.Text;
+using System.Globalization;
 using System.Text.Json;
 using MarketPortfolioAnalytics.Models;
 using MarketPortfolioAnalytics.Models.Analytics;

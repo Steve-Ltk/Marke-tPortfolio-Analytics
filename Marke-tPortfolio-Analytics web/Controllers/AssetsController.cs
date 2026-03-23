@@ -41,7 +41,7 @@ namespace Marke_tPortfolio_Analytics_web.Controllers
                     Id = asset.Id,
                     Ticker = asset.Ticker,
                     Nom = asset.Name,
-                    TypeLabel = AssetHelper.GetTypeLabel(asset), "Stock" ou "Bond"
+                    TypeLabel = AssetHelper.GetTypeLabel(asset), //"Stock" ou "Bond"
                     Exchange = asset.Exchange ?? string.Empty,
                     DeviseNative = isUsd ? "USD" : "EUR",
                     PrixNatif = Math.Round(prixNatif, 2),

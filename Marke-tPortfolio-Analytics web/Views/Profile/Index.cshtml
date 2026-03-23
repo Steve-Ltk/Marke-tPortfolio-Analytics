@@ -28,7 +28,7 @@
                         border-radius:50%;display:flex;align-items:center;justify-content:center;
                         font-family:Sora,sans-serif;font-weight:800;font-size:24px;
                         color:#fff;flex-shrink:0">
-                @* Substring(0,1) -> première lettre. ToUpper() -> toujours majuscule *
+                @* Substring(0,1) -> première lettre. ToUpper() -> toujours majuscule *@
                 @Model.FullName.Substring(0, 1).ToUpper()
             </div>
             <div>
@@ -116,8 +116,18 @@
             </div>
             <div class="field" style="margin-bottom:0">
                 <label>Confirmer</label>
-                <input name="ConfirmPassword" type="password" class="form-control"
-                       placeholder="Répétez le mot de passe" />
+                @* Ajout de required + minlength="8"
+                oninput -> vérifie en temps réel que les deux champs sont identiques *@
+                <input name="ConfirmPassword"
+                       type="password"
+                       class="form-control"
+                       id="confirmPwd"
+                       placeholder="Répétez le mot de passe"
+                       required
+                       minlength="8"
+                       oninput="checkConfirm()" />
+                <div id="confirm-msg"
+                     style="font-size:11px;margin-top:4px;display:none"></div>
             </div>
             <button type="submit" class="btn btn-green" style="height:44px">
                 Changer →
@@ -158,6 +168,32 @@
                 // Barre colorée si le score atteint ce niveau, grise sinon
                 if (bar) bar.style.background = i <= score ? (colors[score] || '#00d084') : 'rgba(255,255,255,.07)';
             });
+        }
+
+        function checkConfirm() {
+            var newPwd = document.getElementById('newPwd');
+            var confirmPwd = document.getElementById('confirmPwd');
+            var msg = document.getElementById('confirm-msg');
+
+            if (!newPwd || !confirmPwd || !msg) return;
+
+            // N'affiche rien si la confirmation est vide
+            if (confirmPwd.value.length === 0) {
+                msg.style.display = 'none';
+                return;
+            }
+
+            msg.style.display = 'block';
+
+            if (newPwd.value === confirmPwd.value) {
+                // Correspond -> texte vert
+                msg.style.color = 'var(--green)';
+                msg.textContent = 'Les mots de passe correspondent';
+            } else {
+                // Ne correspond pas -> texte rouge
+                msg.style.color = 'var(--red)';
+                msg.textContent = 'Les mots de passe ne correspondent pas';
+            }
         }
     </script>
 }
